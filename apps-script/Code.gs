@@ -5,7 +5,7 @@ const TOKEN = 'CAMBIA-ESTA-CLAVE';
 
 const SHEETS = {
   Series: ['id', 'date', 'day', 'ex', 'name', 'set', 'kg', 'reps', 'done'],
-  Diario: ['id', 'date', 'active', 'target', 'eaten', 'protein', 'weight', 'waist', 'drinks', 'grip'],
+  Diario: ['id', 'date', 'active', 'target', 'eaten', 'protein', 'weight', 'waist', 'drinks', 'grip', 'creatine'],
   Comidas: ['id', 'date', 'meal', 'name', 'g', 'kcal', 'p', 'c', 'f', 'drinks'],
 };
 const TYPE_SHEET = { set: 'Series', daily: 'Diario', food: 'Comidas' };

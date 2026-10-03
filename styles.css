@@ -278,3 +278,29 @@ ol.tips li::before { counter-increment: n; content: counter(n); width: 20px; hei
 .sched time, .nowcard time { font-weight: 800; color: var(--cy); font-variant-numeric: tabular-nums; }
 .sched p, .nowcard p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
 .nowcard { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: start; border-color: #155e75; }
+
+/* Menú de comidas */
+.mealtabs { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px; scrollbar-width: none; }
+.mealtabs::-webkit-scrollbar { display: none; }
+.mtab { flex: none; display: grid; text-align: left; padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 700; }
+.mtab small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.mtab.on { background: linear-gradient(135deg, var(--em), #0891b2); border-color: transparent; color: #fff; }
+.mtab.on small { color: #e0f2fe; }
+.menu { display: grid; gap: 6px; }
+.mrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--card2); border: 1px solid transparent; }
+.mrow.on { border-color: var(--em); background: #062a20; }
+.mrow b { display: block; font-size: 14px; font-weight: 600; }
+.mrow small { font-size: 11.5px; color: var(--muted); }
+.step { display: flex; align-items: center; gap: 4px; }
+.step button { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 20px; font-weight: 700; line-height: 1; }
+.step button:last-child { border-color: var(--em); color: var(--em2); }
+.step button:disabled { opacity: .3; }
+.step span { min-width: 30px; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+.daysum { list-style: none; margin: 0; padding: 0; }
+.daysum li { padding: 8px 0; border-top: 1px solid var(--line); }
+.daysum li:first-child { border-top: 0; }
+.daysum em { font-style: normal; color: var(--em2); font-size: 12.5px; font-weight: 700; }
+.daysum p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.creat { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.creat p { margin: 2px 0 0; }
+.creat.done { border-color: #065f46; }

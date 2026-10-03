@@ -3,7 +3,7 @@
 
 const KEY = 'planRetorno.v1';
 const BASE_KCAL = 1700;
-const PROTEIN_G = 160;
+const PROTEIN_G = 150;
 const FAT_G = 65;
 const INC = { bar: 2.5, db: 2, mq: 2.5 };
 const ROUND = { bar: 2.5, db: 2, mq: 2.5 };
@@ -201,7 +201,7 @@ function nextDay() {
 
 // ---------- Nutrición ----------
 function dailyOf(date = TODAY()) {
-  S.daily[date] ??= { active: null, weight: null, waist: null, grip: false };
+  S.daily[date] ??= { active: null, weight: null, waist: null, grip: false, creatine: false };
   return S.daily[date];
 }
 function kcalTarget(date = TODAY()) {
@@ -280,7 +280,7 @@ function queueSet(date, dayId, slug, i, set) {
 function queueDaily(date) {
   const d = dailyOf(date);
   const t = foodTotals(date);
-  enqueue({ type: 'daily', id: date, date, active: d.active, target: kcalTarget(date).target, eaten: t.kcal, protein: Math.round(t.p), weight: d.weight, waist: d.waist, drinks: t.drinks, grip: d.grip });
+  enqueue({ type: 'daily', id: date, date, active: d.active, target: kcalTarget(date).target, eaten: t.kcal, protein: Math.round(t.p), weight: d.weight, waist: d.waist, drinks: t.drinks, grip: d.grip, creatine: !!d.creatine });
 }
 function queueFood(date, it, del = false) {
   enqueue({ type: 'food', id: it.id, date, meal: it.meal, name: it.name, g: it.g, kcal: it.kcal, p: it.p, c: it.c, f: it.f, drinks: it.drinks, del });
@@ -326,6 +326,7 @@ async function restore() {
     d.weight = r.weight === '' ? null : Number(r.weight);
     d.waist = r.waist === '' ? null : Number(r.waist);
     d.grip = r.grip === true || r.grip === 'TRUE';
+    d.creatine = r.creatine === true || r.creatine === 'TRUE';
   }
   for (const r of data.comidas || []) {
     const list = foodOf(r.date);
@@ -427,6 +428,7 @@ function viewHoy() {
   return `
   ${next}
   ${(() => { const [h, what, det] = nextScheduleItem(); return `<div class="card nowcard"><time>${h}</time><div><b>${esc(what)}</b><p>${esc(det)}</p></div></div>`; })()}
+  <div class="card creat ${dl.creatine ? 'done' : ''}"><div><b>💊 Creatina 5 g</b><p class="hint">Todos los días. Con el batido post-gym o con el almuerzo.</p></div><button class="btn small ${dl.creatine ? 'on' : 'ghost'}" data-act="creatine">${dl.creatine ? '✔ Tomada' : 'Marcar'}</button></div>
   <div class="card phase"><b>${ph.label} · RIR ${ph.rir}</b><p>${ph.tip}</p></div>
 
   <div class="card">
@@ -562,15 +564,54 @@ function exCard(day, row, idx) {
   </article>`;
 }
 
+let curMeal = null; // pestaña de comida elegida (si no, la que toca por la hora)
+const mealNow = () => curMeal || mealByHour();
+
+function foodItemsHtml(items) {
+  return `<ul class="food">${items.map((x) => {
+    const units = x.u && x.g ? x.g / x.u[1] : 0;
+    const ulabel = units ? ` <em>≈ ${fmt(units, 1)} ${esc(x.u[0])}</em>` : '';
+    return `<li>
+      <span>${esc(x.name)}${ulabel}</span>
+      ${x.per ? `<label class="fg"><input type="number" inputmode="decimal" data-food-g="${x.id}" value="${x.g}"><i>g</i></label>` : '<span></span>'}
+      <span>${x.kcal} kcal · ${fmt(x.p, 0)} P</span>
+      <button data-act="food-del" data-id="${x.id}" aria-label="Borrar">✕</button>
+    </li>`;
+  }).join('')}</ul>`;
+}
+
+function menuRow(name, meal, list) {
+  const f = FOOD_BY_NAME[name];
+  const [ul, ug] = f[5];
+  const it = list.find((x) => x.meal === meal && x.name === name);
+  const n = it ? it.g / ug : 0;
+  return `<div class="mrow ${n ? 'on' : ''}">
+    <div><b>${esc(name)}</b><small>1 ${esc(ul)} · ${Math.round((f[1] * ug) / 100)} kcal · ${fmt((f[2] * ug) / 100, 0)} g prot.</small></div>
+    <div class="step">
+      <button data-act="menu" data-name="${esc(name)}" data-d="-1" ${n ? '' : 'disabled'} aria-label="Quitar">−</button>
+      <span>${fmt(n, 1)}</span>
+      <button data-act="menu" data-name="${esc(name)}" data-d="1" aria-label="Añadir">+</button>
+    </div>
+  </div>`;
+}
+
 function viewComida() {
   const date = TODAY();
   const kt = kcalTarget();
   const ft = foodTotals();
   const list = foodOf(date);
-  const meals = MEALS;
-  const mealName = MEAL_NAME;
-  const cur = mealByHour();
+  const meal = mealNow();
   const left = kt.target - ft.kcal;
+  const pLeft = PROTEIN_G - ft.p;
+  const kcalOf = (m) => list.filter((x) => x.meal === m).reduce((a, x) => a + x.kcal, 0);
+  const inMeal = list.filter((x) => x.meal === meal);
+  const others = inMeal.filter((x) => !MENU[meal].some(([, names]) => names.includes(x.name)));
+  const summary = MEALS.map((m) => {
+    const items = list.filter((x) => x.meal === m);
+    if (!items.length) return '';
+    return `<li><b>${MEAL_NAME[m]}</b> <em>${kcalOf(m)} kcal</em><p>${items.map((x) => x.name + (x.u && x.g ? ` ×${fmt(x.g / x.u[1], 1)}` : '')).join(' · ')}</p></li>`;
+  }).join('');
+
   return `
   <div class="card">
     <div class="big">${fmt(ft.kcal, 0)} <small>/ ${fmt(kt.target, 0)} kcal</small></div>
@@ -578,26 +619,23 @@ function viewComida() {
     <p class="hint">${left >= 0 ? `Te quedan <b>${fmt(left, 0)} kcal</b>` : `Te has pasado <b>${fmt(-left, 0)} kcal</b>: mañana sin cambios, un día no arruina nada.`}${kt.provisional ? ' · objetivo provisional hasta meter las calorías del Watch' : ''}</p>
     <div class="macros"><span>Proteína <b>${fmt(ft.p, 0)}/${PROTEIN_G} g</b></span><span>Hidratos <b>${fmt(ft.c, 0)} g</b></span><span>Grasa <b>${fmt(ft.f, 0)}/${FAT_G} g</b></span></div>
     ${bar(ft.p, PROTEIN_G, 'prot')}
+    <p class="hint ${pLeft <= 0 ? 'ok' : ''}">${pLeft > 0 ? `Te faltan <b>${fmt(pLeft, 0)} g de proteína</b>${pLeft > 40 ? ' → 2º batido o tu kit (huevo cocido, lata de atún).' : '.'}` : '✔ Proteína del día cubierta.'}</p>
+  </div>
+
+  <div class="mealtabs">${MEALS.map((m) => `<button class="mtab ${m === meal ? 'on' : ''}" data-act="meal" data-meal="${m}">${MEAL_NAME[m]}<small>${kcalOf(m) ? kcalOf(m) + ' kcal' : '—'}</small></button>`).join('')}</div>
+
+  <div class="card">
+    <div class="row"><h3>${MEAL_NAME[meal]}</h3><b>${kcalOf(meal)} kcal</b></div>
+    <p class="hint">Toca <b>+</b> por cada unidad que comiste: 2 huevos = + +. Las cantidades son de comida ya hecha.</p>
+    ${MENU[meal].map(([h, names]) => `<h4>${esc(h)}</h4><div class="menu">${names.map((n) => menuRow(n, meal, list)).join('')}</div>`).join('')}
+    ${others.length ? `<h4>Otros que añadiste</h4>${foodItemsHtml(others)}` : ''}
   </div>
 
   <div class="card">
-    <h3>⚡ Registro rápido: tus comidas</h3>
-    <p class="hint">Un toque y se apunta con las raciones del plan. ¿Comiste distinto? Cambia los gramos abajo (o usa los botones de unidades) o borra lo que no comiste.</p>
-    ${Object.entries(PLAN_MEALS).map(([k, m]) => `
-      <div class="planmeal ${k === cur ? 'now' : ''}"><small>${m.label}${k === cur ? ' · <b>ahora</b>' : ''}</small><div class="opts">${m.opts.map((o, i) => {
-        const kc = o.items.reduce((a, [n, g]) => a + (FOOD_BY_NAME[n][1] * g) / 100, 0);
-        return `<button class="opt" data-act="plan-meal" data-meal="${k}" data-i="${i}"><b>${esc(o.name)}</b><span>${Math.round(kc)} kcal</span></button>`;
-      }).join('')}</div></div>`).join('')}
-  </div>
-
-  <div class="card">
-    <h3>➕ Añadir alimento</h3>
-    <div class="grid2">
-      <label class="field"><span>Comida</span><select id="f-meal">${meals.map((m) => `<option value="${m}" ${m === cur ? 'selected' : ''}>${mealName[m]}</option>`).join('')}</select></label>
-      <label class="field"><span>Buscar</span><input id="f-q" type="search" placeholder="colombina, arroz, máquina…" autocomplete="off"></label>
-    </div>
+    <h3>🔎 ¿No está en el menú?</h3>
+    <label class="field"><span>Buscar (se añade a ${MEAL_NAME[meal].toLowerCase()})</span><input id="f-q" type="search" placeholder="sardinas, pera, cerveza…" autocomplete="off"></label>
     <div id="f-res" class="results"></div>
-    <details class="manual"><summary>Plato fuera de casa / a ojo (kcal manual)</summary>
+    <details class="manual"><summary>Comida fuera de casa / a ojo (kcal manual)</summary>
       <div class="grid2">
         <label class="field"><span>Qué era</span><input id="m-name" placeholder="Menú del día"></label>
         <label class="field"><span>kcal aprox.</span><input id="m-kcal" type="number" inputmode="numeric" placeholder="800"></label>
@@ -608,22 +646,7 @@ function viewComida() {
     </details>
   </div>
 
-  ${meals.map((m) => {
-    const items = list.filter((x) => x.meal === m);
-    if (!items.length) return '';
-    const kc = items.reduce((a, x) => a + x.kcal, 0);
-    return `<div class="card"><div class="row"><h3>${mealName[m]}</h3><b>${kc} kcal</b></div><ul class="food">${items.map((x) => {
-      const units = x.u && x.g ? x.g / x.u[1] : 0;
-      const ulabel = units ? ` <em>≈ ${fmt(units, 1)} ${esc(x.u[0])}</em>` : '';
-      return `<li>
-        <span>${esc(x.name)}${ulabel}</span>
-        ${x.per ? `<label class="fg"><input type="number" inputmode="decimal" data-food-g="${x.id}" value="${x.g}"><i>g</i></label>` : '<span></span>'}
-        <span>${x.kcal} kcal · ${fmt(x.p, 0)} P</span>
-        <button data-act="food-del" data-id="${x.id}" aria-label="Borrar">✕</button>
-        ${x.per && x.u ? `<div class="fu"><button data-act="food-units" data-id="${x.id}" data-d="-1">− 1 ${esc(x.u[0])}</button><button data-act="food-units" data-id="${x.id}" data-d="1">+ 1 ${esc(x.u[0])}</button></div>` : ''}
-      </li>`;
-    }).join('')}</ul></div>`;
-  }).join('')}
+  ${summary ? `<div class="card"><h3>📋 Resumen de hoy</h3><ul class="daysum">${summary}</ul></div>` : ''}
 
   ${nutritionGuide()}`;
 }
@@ -633,59 +656,72 @@ function nutritionGuide() {
   <h2 class="sec">🕐 Tu día tipo</h2>
   <div class="card">
     <ul class="sched">${SCHEDULE.map(([h, t, d]) => `<li><time>${h}</time><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>
-    <p class="hint">Días sin gym: mismo horario. El batido + creatina lo tomas con el almuerzo.</p>
-  </div>
-
-  <div class="card">
-    <h3>🍽️ El plato de entreno (tu comida de siempre, ajustada)</h3>
-    <ul class="tips">
-      <li><b>Proteína: que ocupe la palma entera y sea gruesa.</b> 2 colombinas (no 1), 5-6 albóndigas (no 3-4), un filete grande. Es lo que más te falta.</li>
-      <li><b>Arroz: 1 taza</b> (lo que cabe en tu puño cerrado, un poco más). No un montón.</li>
-      <li><b>Patata frita O maduro, no los dos.</b> Si se puede en airfryer u horno, ahorras 150-200 kcal.</li>
-      <li><b>Legumbres con salchicha:</b> 1 salchicha como mucho y añade un huevo cocido o algo de pollo.</li>
-      <li><b>Pasta con tocino:</b> poco tocino y añade una lata de atún o pollo.</li>
-      <li><b>Ensalada cuando haya</b>: llena sin sumar casi nada. Tomate y cebolla también valen.</li>
-      <li>Primero come la proteína, luego el resto. Si te llenas, que sobre arroz, no carne.</li>
-    </ul>
+    <p class="hint">Días sin gym: mismo horario, y la creatina (con o sin batido) va con el almuerzo.</p>
   </div>
 
   <div class="card">
     <h3>🥤 Proteína en polvo y creatina</h3>
     <ul class="tips">
-      <li><b>Proteína: 2 cacitos al día</b> (≈30 g de polvo, ≈24 g de proteína cada uno; mira la etiqueta). Uno al salir del gym (13:15) y otro a media tarde en el trabajo (18:00).</li>
-      <li>Con agua. Llévalo al trabajo en el shaker con el polvo ya puesto: allí solo añades agua y agitas.</li>
-      <li>Si tu proteína es <b>whey concentrada</b>, lleva algo de lactosa. Si te da gases, cámbiala por <b>whey isolate</b> (aislada) o vegetal.</li>
-      <li><b>Creatina monohidrato: 5 g todos los días</b>, también los de descanso, sin fase de carga. La hora no importa; te la pongo en el batido post-gym para no olvidarla.</li>
-      <li>Con creatina bebe tus 3 L de agua. Los primeros días puedes subir 1-1,5 kg en la báscula: es agua dentro del músculo, no grasa. Fíate de la cintura.</li>
+      <li><b>Cacito</b> = el medidor de plástico que viene dentro del bote. Suele ser ≈30 g de polvo ≈ 24 g de proteína (mira la etiqueta de tu bote).</li>
+      <li><b>Al llegar del gym:</b> 1 cacito + 5 g de creatina, todo junto en 300 ml de agua. Agitas y listo.</li>
+      <li><b>2º batido solo si hace falta:</b> si a las 18:00 la app dice que te faltan más de 40 g de proteína. Si el almuerzo fue fuerte, no.</li>
+      <li><b>Creatina 5 g todos los días</b>, también los de descanso. Sin fase de carga. Lo que importa es no saltártela, no la hora.</li>
+      <li>Si tu proteína es <b>whey concentrada</b> lleva algo de lactosa. Si te da gases, cámbiala por <b>whey isolate</b> o vegetal.</li>
+      <li>Con creatina, 3 L de agua al día. Los primeros días puedes subir 1-1,5 kg: es agua dentro del músculo, no grasa. Fíate de la cintura.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>🏠 Piso compartido: tu kit de proteína</h3>
+    <p class="hint">Comes lo que toque y completas con cosas tuyas, sin cocinar aparte ni quitarle nada a nadie.</p>
+    <ul class="tips">
+      <li><b>Huevos cocidos en tanda:</b> el domingo cueces 6-8 y aguantan 4-5 días en la nevera. 1-2 al lado del plato = +12-25 g de proteína.</li>
+      <li><b>Una lata de atún o sardinas</b> encima del arroz: +15-25 g en 10 segundos.</li>
+      <li><b>Pechuga de pavo en lonchas</b> o <b>claras de huevo de botella</b> (en tortilla rápida).</li>
+      <li>¿Ración pequeña de carne? Sírvete <b>menos arroz o patata</b> y suma tu kit. La proteína es lo que manda.</li>
+      <li>Si un día no llegas, para eso está el 2º batido. Sin dramas.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>🛒 Lista de compra (Mercadona, económico)</h3>
+    <table class="rules">
+      <tr><td>Proteína</td><td>Huevos (docena) · atún al natural (pack de latas) · sardinas y caballa en lata · mejillones en escabeche · claras de huevo en botella · pechuga de pavo en lonchas · pechuga de pollo en bandeja · garbanzos y lentejas cocidos en bote</td></tr>
+      <tr><td>Fruta</td><td>Plátanos · mandarinas · manzanas · kiwis (la más barata de temporada)</td></tr>
+      <tr><td>Desayuno</td><td>Pan de molde integral · copos de avena · leche sin lactosa o bebida de soja (tiene proteína)</td></tr>
+      <tr><td>Picoteo bueno</td><td>Cacahuetes tostados · crema de cacahuete 100 % · tortitas de maíz · chocolate negro 85 %</td></tr>
+    </table>
+    <p class="hint">Lo que más te va a ayudar: huevos, latas de atún/sardinas y plátanos. Baratos, duran y no hay que cocinar.</p>
+  </div>
+
+  <div class="card">
+    <h3>🍽️ Cuando te sirvas tú</h3>
+    <ul class="tips">
+      <li><b>Arroz: 1 taza</b> (un puño cerrado y poco más). Si hay legumbre, media taza basta.</li>
+      <li><b>Patata frita O plátano macho, no los dos.</b></li>
+      <li><b>Garbanzos/lentejas con salchicha:</b> coge 1 salchicha y añade un huevo cocido de tu kit.</li>
+      <li><b>Pasta con panceta:</b> plato normal (no doble) + una lata de atún.</li>
+      <li><b>Ensalada o tomate</b> cuando haya: llena sin sumar casi nada.</li>
+      <li>Primero la proteína, luego el resto. Si te llenas, que sobre arroz, no carne.</li>
     </ul>
   </div>
 
   <div class="card">
     <h3>🏪 La máquina del trabajo</h3>
-    <p class="hint">Lo mejor es no necesitarla: shaker con proteína + un banano o una lata de atún con pan desde casa.</p>
     <table class="rules">
-      <tr><td>✅ Mejor</td><td><b>Barrita de proteínas</b> (≈160 kcal, 15 g prot.) · <b>frutos secos/cacahuetes</b> naturales o tostados (≈240 kcal, 10 g prot.)</td></tr>
-      <tr><td>🟡 Si no hay otra</td><td>Barrita de cereales (≈100 kcal) · bolsa pequeña de patatas (≈200 kcal)</td></tr>
+      <tr><td>✅ Mejor</td><td><b>Barrita de proteínas</b> · <b>frutos secos o cacahuetes</b></td></tr>
+      <tr><td>🟡 Si no hay otra</td><td>Barrita de cereales · bolsa pequeña de patatas</td></tr>
       <tr><td>❌ Evita</td><td>Bollería, chocolatinas, galletas y refrescos normales: 220-300 kcal de azúcar sin proteína, y a la hora tienes más hambre</td></tr>
     </table>
-    <p class="hint">Bebida: agua, café o refresco zero. Ojo: muchas barritas y chocolatinas llevan leche (lactosa).</p>
+    <p class="hint">Lo ideal es no necesitarla: un plátano o una mandarina en la mochila. Ojo: muchas chocolatinas y barritas llevan leche (lactosa).</p>
   </div>
-
-  <h2 class="sec">📖 Raciones de tus comidas</h2>
-  ${Object.values(PLAN_MEALS).map((m) => `
-  <div class="card">
-    <h3>${m.label}</h3>
-    ${m.opts.map((o) => `<div class="mealopt"><b>${esc(o.name)}</b><ul>${o.items.map(([n, g]) => { const f = FOOD_BY_NAME[n]; const u = f[5]; const units = g / u[1]; return `<li>${esc(n)} — <b>${g} g</b>${Math.abs(units - Math.round(units)) < 0.05 && Math.round(units) >= 1 && !u[0].includes(' ') ? ` <em>(${Math.round(units)} ${u[0]})</em>` : ''}</li>`; }).join('')}</ul></div>`).join('')}
-  </div>`).join('')}
 
   <div class="card">
     <h3>📏 Cómo medir sin volverte loco</h3>
     <ul class="tips">
-      <li>Los gramos de tus platos de casa son <b>ya cocinados</b>: pesa lo que va al plato.</li>
-      <li>La primera semana pesa tu plato de arroz y tu ración de carne con una báscula de cocina; después ya lo calculas a ojo.</li>
-      <li>Si comiste distinto, toca <b>+1 / −1</b> (colombina, albóndiga, taza…) en lo registrado. No hace falta ser exacto.</li>
-      <li>¿Te toca más de 2.000 kcal? Media taza más de arroz (+100 kcal) o una fruta.</li>
-      <li>Si comes fuera, usa el registro manual con la referencia más parecida. Mejor aproximado que no apuntar.</li>
+      <li>Todo está en <b>unidades de casa</b>: huevos, rebanadas, tazas, cazos, latas, muslos. No hace falta báscula.</li>
+      <li>Taza de arroz = una taza de desayuno normal llena. Cazo = el cucharón de servir.</li>
+      <li>Mejor aproximado que no apuntar: con que se parezca, la báscula semanal dirá si vamos bien.</li>
     </ul>
   </div>
 
@@ -898,25 +934,33 @@ document.addEventListener('click', async (e) => {
   if (act === 'grip') { const d = dailyOf(); d.grip = !d.grip; queueDaily(today); save(); render(); return; }
   if (act === 'adjust') { S.kcalAdjust += +t.dataset.delta; queueDaily(today); save(); render(); return; }
   if (act === 'adjust-reset') { S.kcalAdjust = 0; save(); render(); return; }
-  if (act === 'plan-meal') {
-    const m = PLAN_MEALS[t.dataset.meal].opts[+t.dataset.i];
+  if (act === 'meal') { curMeal = t.dataset.meal; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
+  if (act === 'menu') {
+    const meal = mealNow();
+    const f = FOOD_BY_NAME[t.dataset.name];
+    const [, ug, step = 1] = f[5];
     const list = foodOf();
-    for (const [n, g] of m.items) { const it = makeFoodEntry(FOOD_BY_NAME[n], g, t.dataset.meal); list.push(it); queueFood(today, it); }
-    save(); render(); toast(`${m.name} añadido`); return;
+    const it = list.find((x) => x.meal === meal && x.name === f[0]);
+    const g = Math.round(((it?.g || 0) + +t.dataset.d * step * ug) * 10) / 10;
+    if (it && g <= 0) { list.splice(list.indexOf(it), 1); queueFood(today, it, true); }
+    else if (it) { setGrams(it, g); queueFood(today, it); }
+    else if (g > 0) { const n = makeFoodEntry(f, g, meal); list.push(n); queueFood(today, n); }
+    save(); const y = window.scrollY; render(); window.scrollTo(0, y); return;
   }
+  if (act === 'creatine') { const d = dailyOf(); d.creatine = !d.creatine; queueDaily(today); save(); render(); return; }
   if (act === 'units') { t.closest('.fres').querySelector('input').value = t.dataset.g; return; }
   if (act === 'food-add') {
     const box = t.closest('.fres');
     const f = box.dataset.src === 'local' ? FOODS[+box.dataset.idx] : offCache[+box.dataset.idx];
     const g = num(box.querySelector('input').value);
     if (!g) return;
-    const it = makeFoodEntry(f, g, $('#f-meal').value);
+    const it = makeFoodEntry(f, g, mealNow());
     foodOf().push(it); queueFood(today, it); save(); render(); toast(`${f[0]} · ${it.kcal} kcal`); return;
   }
   if (act === 'manual-add') {
     const kcal = num($('#m-kcal').value);
     if (!kcal) return;
-    const it = { id: uid(), meal: $('#f-meal').value, name: $('#m-name').value || 'Comida manual', g: 0, kcal: Math.round(kcal), p: num($('#m-p').value) || 0, c: 0, f: 0, drinks: 0 };
+    const it = { id: uid(), meal: mealNow(), name: $('#m-name').value || 'Comida manual', g: 0, kcal: Math.round(kcal), p: num($('#m-p').value) || 0, c: 0, f: 0, drinks: 0 };
     foodOf().push(it); queueFood(today, it); save(); render(); return;
   }
   if (act === 'food-del') {
