@@ -77,7 +77,8 @@ function prescribe(dayId, row) {
   const ex = EX[slug];
   const ph = phase();
   const hist = history(slug);
-  const sets = ph.deload ? Math.max(1, nSets - 1) : nSets;
+  const base = nSets + (ex.main && planWeek() >= 3 ? 1 : 0);
+  const sets = ph.deload ? Math.max(1, base - 1) : base;
   const step = ROUND[ex.inc] || 1;
 
   if (!hist.length) {
@@ -131,10 +132,10 @@ function prescribe(dayId, row) {
 }
 
 // Calentamiento calculado a partir del peso de trabajo
-function warmups(ex, kg) {
+function warmups(ex, kg, first) {
   if (!kg || kg <= 0) return [];
   const step = ROUND[ex.inc] || 2.5;
-  if (ex.main) {
+  if (ex.main && first) {
     const out = [];
     if (ex.inc === 'bar') out.push({ kg: 20, reps: 10, label: 'Barra vacía' });
     for (const [pct, reps] of [[0.5, 6], [0.7, 4], [0.85, 2]]) {
@@ -143,7 +144,7 @@ function warmups(ex, kg) {
     }
     return out;
   }
-  if (ex.warm) {
+  if (ex.warm || ex.main) {
     const w = roundTo(kg * 0.6, step);
     return w > 0 && w < kg ? [{ kg: w, reps: 8, label: '60 %' }] : [];
   }
@@ -186,9 +187,14 @@ function trainedDays() {
   for (const date of sessionDates()) for (const did in S.sessions[date]) if (dayDone(date, did) > 0) out.push({ date, day: did });
   return out;
 }
+function slotRow(day, idx) {
+  const r = day.ex[idx];
+  const sw = S.swaps?.[day.id + ':' + idx];
+  return sw && EX[sw] ? [sw, ...r.slice(1)] : r;
+}
 function nextDay() {
-  const tr = trainedDays().filter((t) => t.day !== 'd5');
-  const order = ['d1', 'd2', 'd3', 'd4'];
+  const tr = trainedDays();
+  const order = DAYS.map((d) => d.id);
   if (!tr.length) return { day: 'd1' };
   const last = tr[tr.length - 1];
   const all = trainedDays();
@@ -196,7 +202,8 @@ function nextDay() {
   const doneToday = all.filter((t) => t.date === today);
   const y1 = all.some((t) => t.date === addDays(today, -1));
   const y2 = all.some((t) => t.date === addDays(today, -2));
-  return { day: order[(order.indexOf(last.day) + 1) % 4], doneToday, rest: !doneToday.length && y1 && y2 };
+  const y3 = all.some((t) => t.date === addDays(today, -3));
+  return { day: order[(order.indexOf(last.day) + 1) % order.length], doneToday, rest: !doneToday.length && y1 && y2 && y3 };
 }
 
 // ---------- Nutrición ----------
@@ -422,8 +429,15 @@ function viewHoy() {
 
   let next;
   if (nd.doneToday?.length) next = `<div class="hero done"><small>Hoy</small><h2>✔ Entrenado: ${nd.doneToday.map((t) => DAY_BY_ID[t.day].short + ' ' + DAY_BY_ID[t.day].title).join(' + ')}</h2><p>Próximo: <b>${d.short} · ${d.title}</b>. Ahora toca comer bien y descansar.</p></div>`;
-  else if (nd.rest) next = `<div class="hero rest"><small>Recomendación</small><h2>Hoy descansa 😴</h2><p>Llevas 2 días seguidos. Caminata de 30-45 min y estiramientos. Próximo: <b>${d.short} · ${d.title}</b>.</p><button class="btn ghost" data-tab="${d.id}">Entrenar igualmente</button></div>`;
-  else next = `<div class="hero"><small>Te toca</small><h2>${d.short} · ${d.title}</h2><p>${esc(d.sub)}</p><button class="btn" data-tab="${d.id}">Empezar entrenamiento →</button></div>`;
+  else if (nd.rest) next = `<div class="hero rest"><small>Recomendación</small><h2>Hoy descansa 😴</h2><p>Llevas 3 días seguidos. Caminata de 30-45 min y estiramientos. Próximo: <b>${d.short} · ${d.title}</b>.</p><button class="btn ghost" data-tab="${d.id}">Entrenar igualmente</button></div>`;
+  else {
+    const wdToday = new Date().getDay();
+    const planned = DAYS.find((x) => x.wdn === wdToday);
+    const first = !trainedDays().length;
+    const note = first && wdToday !== 1 ? '<p class="small">Lo ideal es arrancar el lunes con el D1 para cuadrar la semana (si quieres empezar hoy, adelante).</p>'
+      : planned && planned.id !== d.id ? `<p class="small">Por calendario hoy sería ${planned.short} · ${planned.title}; sigues el orden y no te saltas nada.</p>` : '';
+    next = `<div class="hero"><small>Te toca · ${d.wd}</small><h2>${d.short} · ${d.title}</h2><p>${esc(d.sub)}</p><p class="small">${SHOES[d.shoes]}</p>${note}<button class="btn" data-tab="${d.id}">Empezar entrenamiento →</button></div>`;
+  }
 
   return `
   ${next}
@@ -492,21 +506,25 @@ function spark(pts) {
 function viewDay(day) {
   const today = TODAY();
   const done = dayDone(today, day.id);
-  const total = day.ex.reduce((a, r) => a + prescribe(day.id, r).sets, 0);
+  const rows = day.ex.map((r, idx) => slotRow(day, idx));
+  const total = rows.reduce((a, r) => a + prescribe(day.id, r).sets, 0);
   const week = planWeek();
   const cardio = CARDIO[day.cardio].find((c) => week >= c.weeks[0] && week <= c.weeks[1]);
   return `
   <div class="dayhead">
-    <div><h2>${day.short} · ${day.title}${day.optional ? ' <span class="chip opt">Opcional</span>' : ''}</h2><p>${esc(day.sub)}</p></div>
+    <div><small class="wd">${day.wd}</small><h2>${day.short} · ${day.title}</h2><p>${esc(day.sub)}</p></div>
     <div class="ring" style="--p:${(done / total) * 100}"><span>${done}/${total}</span></div>
   </div>
-  <div class="card warmup"><b>🔥 Calentamiento (8 min)</b><p>5 min cinta a paso rápido + 10 rotaciones de hombro, 10 sentadillas sin peso, 10 aperturas con banda o brazos. El primer ejercicio incluye sus series de aproximación.</p></div>
-  ${day.ex.map((r, idx) => exCard(day, r, idx)).join('')}
+  <div class="card shoes">${SHOES[day.shoes]}</div>
+  <div class="card warmup"><b>🔥 Calentamiento (8 min)</b><p>5 min cinta a paso rápido + 10 rotaciones de hombro, 10 sentadillas sin peso, 10 aperturas con banda o brazos. El primer ejercicio incluye sus series de aproximación.</p>
+  <p class="hint">Orden: los 2 primeros ejercicios no se mueven (pesados y press con mancuernas). Del 3º en adelante, si algo está ocupado, cambia el orden o pulsa 🔄 Cambiar.</p></div>
+  ${rows.map((r, idx) => exCard(day, r, idx)).join('')}
   <div class="card cardio">
-    <h3>🏃 ${esc(cardio.title)}</h3>
+    <h3>${esc(cardio.title)}</h3>
     <ul>${cardio.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
     <p class="hint">⌚ En el Watch: Entreno → Correr en interior (o Caminar en interior). Zona 2 ≈ 110-135 ppm: puedes hablar en frases.</p>
   </div>
+  ${day.klass ? `<div class="card klass"><b>🥊 Clase recomendada</b><p>${esc(day.klass)}. Resérvala en la app de VivaGym (hasta 7 días antes, máx. 2 al día).</p></div>` : ''}
   <div class="card"><b>🧘 Vuelta a la calma (5 min)</b><p class="hint">Estira pecho, dorsal, cuádriceps y femoral 30 s cada uno. Bebe agua.</p></div>`;
 }
 
@@ -520,7 +538,9 @@ function exCard(day, row, idx) {
   const unit = ex.inc === 'time' ? 's' : 'reps';
   const nDone = sets.slice(0, pr.sets).filter((s) => s.done).length;
   const complete = nDone >= pr.sets;
-  const wu = warmups(ex, pr.kg);
+  const wu = warmups(ex, pr.kg, idx === 0);
+  const opts = [day.ex[idx][0], ...(day.ex[idx][6] || [])];
+  const key = day.id + ':' + idx;
   const tagCls = (t) => (t === 'Fuerza' ? 'fuerza' : t === 'Viga' ? 'viga' : t.startsWith('Extra') || t === 'Dcho primero' ? 'asim' : t === 'Antebrazo' ? 'ante' : t === 'Core' ? 'core' : '');
   const lastTxt = hist.length ? `${hist[0].sets.map((s) => (s.kg != null ? fmt(s.kg) + '×' : '') + s.reps).join(' · ')} <em>(${parseD(hist[0].date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })})</em>` : 'Primera vez';
 
@@ -530,7 +550,7 @@ function exCard(day, row, idx) {
     const hint = inSessionHint(ex, row, sets, i);
     const kgPh = hint?.kg ?? pr.kg;
     rows.push(`
-    <div class="set ${s.done ? 'done' : ''}" data-day="${day.id}" data-slug="${slug}" data-i="${i}">
+    <div class="set ${s.done ? 'done' : ''}" data-day="${day.id}" data-idx="${idx}" data-slug="${slug}" data-i="${i}">
       <span class="sn">S${i + 1}</span>
       ${ex.inc === 'time' ? '<span class="kg na">—</span>' : `<label class="kg"><input type="number" inputmode="decimal" step="0.5" data-f="kg" value="${s.kg ?? ''}" placeholder="${kgPh ?? 'kg'}"><i>kg</i></label>`}
       <label class="rp"><input type="number" inputmode="numeric" data-f="reps" value="${s.reps ?? ''}" placeholder="${pr.reps[i] ?? rmax}"><i>${unit}</i></label>
@@ -547,7 +567,9 @@ function exCard(day, row, idx) {
       <span class="exstate">${nDone}/${pr.sets}</span>
     </button>
     <div class="exbody">
-      <div class="tags">${tags.map((t) => `<span class="chip ${tagCls(t)}">${esc(t)}</span>`).join('')}</div>
+      <div class="tags">${tags.map((t) => `<span class="chip ${tagCls(t)}">${esc(t)}</span>`).join('')}${opts.length > 1 ? `<button class="swapbtn" data-act="swap-open">🔄 Cambiar</button>` : ''}</div>
+      ${opts.length > 1 ? `<div class="swaps" hidden><small>¿Máquina ocupada o no la hay? Elige otra (cada una guarda su progreso):</small>${opts.map((o) => `<button class="${o === slug ? 'on' : ''}" data-act="swap" data-key="${key}" data-slug="${o}">${o === slug ? '✔ ' : ''}${esc(EX[o].name)}</button>`).join('')}</div>` : ''}
+      ${tags.includes('Superserie') && tags.includes('Bíceps') ? '<div class="ssnote">🔁 Superserie: 1 serie de curl → 1 de tríceps sin descanso → descansa → repite.</div>' : ''}
       <button class="imgwrap" data-act="zoom" data-img="${IMG + ex.img}" aria-label="Ampliar imagen"><img loading="lazy" src="${IMG + ex.img}" alt="${esc(ex.name)}" onerror="this.parentNode.classList.add('noimg')"><span>Ver en grande</span></button>
       <div class="prog ${pr.status}">
         <div><small>Última vez</small><p>${lastTxt}</p></div>
@@ -755,7 +777,7 @@ function nutritionGuide() {
 }
 
 function viewMetodo() {
-  const lifts = ['barbell-bench-press', 'squat', 'barbell-row', 'barbell-deadlift', 'dumbbell-shoulder-press'];
+  const lifts = ['barbell-bench-press', 'squat', 'barbell-row', 'barbell-deadlift', 'smith-machine-shoulder-press', 'incline-dumbbell-bench-press'];
   const e1rm = (kg, r) => kg * (1 + r / 30);
   const rowsL = lifts.map((slug) => {
     const h = history(slug, '9999-12-31');
@@ -788,7 +810,7 @@ function viewMetodo() {
 
   <div class="card">
     <h3>🏋️ Calentamiento de los básicos</h3>
-    <p>En el primer ejercicio de cada día la app calcula tus series de aproximación: barra vacía × 10 → 50 % × 6 → 70 % × 4 → 85 % × 2 → series de trabajo. En los segundos ejercicios, 1 serie al 60 % × 8.</p>
+    <p>Solo en el <b>primer ejercicio</b> del día: barra vacía × 10 → 50 % × 6 → 70 % × 4 → 85 % × 2 → series de trabajo. En los demás ejercicios grandes, 1 serie al 60 % × 8. En máquinas pequeñas y aislamientos, ninguna: ya estás caliente.</p>
   </div>
 
   <div class="card">
@@ -798,13 +820,27 @@ function viewMetodo() {
   </div>
 
   <div class="card">
-    <h3>📆 Organización</h3>
+    <h3>📆 Tu semana</h3>
+    <table class="rules">
+      ${DAYS.map((d) => `<tr><td>${d.wd}</td><td><b>${d.short} · ${d.title}</b><br><small>${d.cardio === 'intervalos' ? '🏃 Correr 25 min' : '🚶 10 min suaves' + (d.klass ? ' + clase: ' + esc(d.klass) : '')}</small></td></tr>`).join('')}
+      <tr><td>Miércoles</td><td>Descanso activo: caminata 30-45 min o clase de Movilidad/Stretching · gripper</td></tr>
+      <tr><td>Domingo</td><td>Descanso total · gripper</td></tr>
+    </table>
     <ul class="tips">
-      <li>Haz D1 → D2 → D3 → D4 en orden, el día que puedas. La pestaña <b>Hoy</b> te dice cuál toca.</li>
-      <li>Máximo 2 días seguidos y luego 1 de descanso (caminata).</li>
-      <li><b>D5 opcional</b> cuando vayas con compañía (fin de semana). Mejor no justo antes de un día de torso.</li>
-      <li>Sesión: 8 min de calentamiento, 60-70 min de pesas, 20-30 min de cinta, 5 min de estiramientos.</li>
-      <li><b>Clases grupales:</b> opcionales en días de descanso (ciclo indoor, baile, movilidad). Nunca en lugar de las pesas, y sin pierna intensa el día antes de D2/D4.</li>
+      <li>Cada músculo se entrena 2 veces por semana; el hombro lateral (viga) 3.</li>
+      <li>Si un día no puedes ir, no pasa nada: la pestaña <b>Hoy</b> sigue el orden D1→D5 y te dice cuál toca.</li>
+      <li><b>Seguridad:</b> los press con mancuernas por encima de la cara van siempre de primeros. A mitad de sesión, máquina o multipower.</li>
+      <li>Sesión: 8-10 min de calentamiento, 65-75 min de pesas, 25 min de cinta (o 10 suaves + clase), 5 min de estiramientos.</li>
+      <li><b>Si 2 semanas seguidas baja la fuerza, duermes mal o duelen las articulaciones:</b> vuelve a 4 días (quita el D5) hasta recuperarte.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>🥊 Clases de VivaGym</h3>
+    <ul class="tips">
+      <li><b>Sí:</b> Boxeo y Abdominales/Xpress tras pierna (martes y sábado); Movilidad, Stretching o Pilates el miércoles.</li>
+      <li><b>No por ahora:</b> HIT, V-Cross, V-Power, V-Hybrid (fuerza intensa encima de tus 5 días, en déficit te frena) ni Cycling tras pierna.</li>
+      <li>Nunca en lugar de las pesas.</li>
     </ul>
   </div>`;
 }
@@ -896,7 +932,7 @@ document.addEventListener('click', async (e) => {
     const row = t.closest('.set');
     const { day, slug } = row.dataset;
     const i = +row.dataset.i;
-    const dayRow = DAY_BY_ID[day].ex.find((r) => r[0] === slug);
+    const dayRow = slotRow(DAY_BY_ID[day], +row.dataset.idx);
     const pr = prescribe(day, dayRow);
     const sets = setsFor(today, day, slug, pr.sets);
     const s = sets[i];
@@ -917,6 +953,14 @@ document.addEventListener('click', async (e) => {
     render();
     window.scrollTo(0, y);
     return;
+  }
+  if (act === 'swap-open') { t.closest('.exbody').querySelector('.swaps').hidden ^= true; return; }
+  if (act === 'swap') {
+    S.swaps ??= {};
+    const [did, idx] = t.dataset.key.split(':');
+    if (DAY_BY_ID[did].ex[+idx][0] === t.dataset.slug) delete S.swaps[t.dataset.key];
+    else S.swaps[t.dataset.key] = t.dataset.slug;
+    save(); const y = window.scrollY; render(); window.scrollTo(0, y); return;
   }
   if (act === 'toggle-ex') { t.closest('.ex').classList.toggle('collapsed'); return; }
   if (act === 'zoom') { $('#zoomimg').src = t.dataset.img; $('#zoom').hidden = false; return; }

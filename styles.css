@@ -304,3 +304,17 @@ ol.tips li::before { counter-increment: n; content: counter(n); width: 20px; hei
 .creat { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .creat p { margin: 2px 0 0; }
 .creat.done { border-color: #065f46; }
+
+/* Días fijos, zapatillas, cambiar ejercicio */
+.dayhead .wd, .hero .small { font-size: 12px; }
+.dayhead .wd { color: var(--cy); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.hero .small { opacity: .9; margin-top: 4px; }
+.shoes { font-size: 13.5px; font-weight: 600; border-color: #155e75; }
+.klass { border-color: #4c1d95; }
+.klass p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.swapbtn { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--cy); padding: 3px 8px; border: 1px solid #155e75; border-radius: 999px; }
+.swaps { display: grid; gap: 6px; margin-bottom: 10px; }
+.swaps small { font-size: 12px; color: var(--muted); }
+.swaps button { text-align: left; padding: 9px 12px; border-radius: 10px; background: var(--card2); border: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+.swaps button.on { border-color: var(--em); color: var(--em2); }
+.ssnote { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--violet); background: #1d1233; border: 1px solid #4c1d95; padding: 8px 10px; border-radius: 10px; }
