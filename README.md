@@ -1,10 +1,10 @@
-# Plan Retorno
+# Gym Vancho
 
 App web (instalable en iPhone) de entrenamiento, progresión y nutrición sin lactosa.
 
 - **Hoy**: qué día toca, calorías (Watch), peso/cintura, alcohol, hand grip.
-- **D1-D4** (+ D5 opcional): ejercicios con imagen, peso y reps calculados (doble progresión), calentamiento, temporizador de descanso y cardio.
-- **Comida**: registro con un toque de las comidas del plan, buscador de alimentos (+ Open Food Facts) y kcal manuales.
+- **D1-D5** (L, M, J, V, S): ejercicios con imagen, peso y reps calculados (doble progresión), calentamiento, temporizador de descanso y cardio.
+- **Comida**: menú para ir añadiendo lo que comes, buscador de alimentos (+ Open Food Facts) y kcal manuales.
 - **Método**: reglas de progresión y evolución de la fuerza (1RM estimado).
 - Datos en el móvil (offline) + copia en Google Sheets.
 
@@ -17,7 +17,7 @@ App web (instalable en iPhone) de entrenamiento, progresión y nutrición sin la
 
 ## Conectar Google Sheets
 
-1. Crea una hoja nueva en Google Drive (ej. "Plan Retorno").
+1. Crea una hoja nueva en Google Drive (ej. "Gym Vancho").
 2. Extensiones → **Apps Script** → borra lo que haya y pega `apps-script/Code.gs`.
 3. Cambia `TOKEN` por una clave inventada (ej. `ivan-gym-8472`) y guarda.
 4. **Implementar → Nueva implementación** → tipo *Aplicación web* → Ejecutar como: *Yo* → Acceso: *Cualquier usuario* → Implementar → autoriza con tu cuenta.

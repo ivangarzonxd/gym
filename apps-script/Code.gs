@@ -1,4 +1,4 @@
-// Plan Retorno — backend en Google Sheets.
+// Gym Vancho — backend en Google Sheets.
 // 1) Cambia TOKEN por una clave tuya (la misma que pondrás en Ajustes de la app).
 // 2) Implementar → Nueva implementación → Aplicación web → Ejecutar como: Yo · Acceso: Cualquier usuario.
 const TOKEN = 'CAMBIA-ESTA-CLAVE';
@@ -36,7 +36,7 @@ function doPost(e) {
 }
 
 function doGet() {
-  return out({ ok: true, app: 'Plan Retorno' });
+  return out({ ok: true, app: 'Gym Vancho' });
 }
 
 function sheet(name) {

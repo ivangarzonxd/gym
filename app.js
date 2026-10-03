@@ -1,4 +1,4 @@
-// Plan Retorno — app de entrenamiento, progresión y nutrición.
+// Gym Vancho — app de entrenamiento, progresión y nutrición.
 // Estado en localStorage (caché/offline) + sincronización con Google Sheets vía Apps Script.
 
 const KEY = 'planRetorno.v1';
@@ -45,8 +45,8 @@ function planWeek() {
 }
 function phase(week = planWeek()) {
   if (week % 6 === 0) return { rir: '4', label: 'Semana de descarga', deload: true, tip: 'Mismo ejercicio, −10 % de peso y una serie menos. Recuperas y vuelves más fuerte.' };
-  if (week <= 2) return { rir: '3', label: 'Readaptación', tip: 'Te sobran 3 reps en cada serie. Tendones y articulaciones primero.' };
-  if (week <= 5) return { rir: '2', label: 'Construcción', tip: 'Te sobran 2 reps. Aquí empieza la progresión de verdad.' };
+  if (week <= 2) return { rir: '3', label: 'Readaptación', tip: 'En TODAS las series: elige un peso con el que podrías hacer 3 reps más de las que pide la app, y para. Tendones y articulaciones primero.' };
+  if (week <= 5) return { rir: '2', label: 'Construcción', tip: 'Elige un peso con el que podrías hacer 2 reps más de las que pide la app. Aquí empieza la progresión de verdad.' };
   return { rir: '1-2', label: 'Progresión', tip: 'Básicos con RIR 2; aislamientos pueden ir a RIR 1.' };
 }
 
@@ -815,7 +815,8 @@ function viewMetodo() {
 
   <div class="card">
     <h3>🎯 RIR (reps en reserva)</h3>
-    <p>Las reps que te quedan en el depósito al acabar. RIR 2 = podrías hacer 2 más con buena técnica, pero paras.</p>
+    <p>Las reps que te quedan en el depósito al acabar la serie. No se trata de hacer menos reps de las que pide la app, sino de <b>elegir un peso más ligero</b>: si la app pide 10 y estás en RIR 3, usa un peso con el que podrías hacer 13, haz 10 y para. La última rep sale limpia y rápida, sin sufrir.</p>
+    <p class="hint">Si te sobran muchas más, la app te dice que subas en la siguiente serie. En 1-2 sesiones das con tu peso.</p>
     <ul class="tips"><li>Semanas 1-2: RIR 3 (readaptación)</li><li>Semanas 3-5: RIR 2</li><li>Semana 6: descarga</li><li>Semana 7+: RIR 1-2 (básicos siempre 2)</li></ul>
   </div>
 
@@ -1049,7 +1050,7 @@ document.addEventListener('click', async (e) => {
   if (act === 'export') {
     const blob = new Blob([JSON.stringify({ ...S, cfg: { url: S.cfg.url, token: '' } }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = `plan-retorno-${today}.json`; a.click();
+    a.href = URL.createObjectURL(blob); a.download = `gym-vancho-${today}.json`; a.click();
     return;
   }
 });

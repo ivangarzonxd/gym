@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin conexión en el gym.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'data.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

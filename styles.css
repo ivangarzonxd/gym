@@ -318,3 +318,29 @@ ol.tips li::before { counter-increment: n; content: counter(n); width: 20px; hei
 .swaps button { text-align: left; padding: 9px 12px; border-radius: 10px; background: var(--card2); border: 1px solid var(--line); font-size: 14px; font-weight: 600; }
 .swaps button.on { border-color: var(--em); color: var(--em2); }
 .ssnote { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--violet); background: #1d1233; border: 1px solid #4c1d95; padding: 8px 10px; border-radius: 10px; }
+
+/* Estilo sobrio: un solo color de acento (esmeralda) y botones neutros */
+.top h1 { background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--text); }
+.tab.on, .mtab.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.mtab.on small { color: #475569; }
+.btn { background: var(--em); }
+.btn.on { background: var(--em); }
+.hero, .hero.done, .hero.rest { background: var(--card); border: 1px solid var(--line); }
+.hero small { color: var(--muted); opacity: 1; }
+.hero .btn { background: var(--em); color: #fff; }
+.hero .btn.ghost { background: var(--card2); color: var(--text); border-color: var(--line); }
+.chip, .chip.fuerza, .chip.viga, .chip.asim, .chip.ante, .chip.core { background: var(--card2); color: var(--muted); border-color: var(--line); }
+.asimnote, .ssnote { background: var(--card2); border: 1px solid var(--line); border-left: 3px solid var(--em); color: var(--text); }
+.prog, .prog.up, .prog.down, .prog.deload, .prog.cal { border-left-color: var(--line); }
+.prog .msg, .prog.cal .msg, .prog.down .msg, .prog.deload .msg { color: var(--text); }
+.prog.up .msg { color: var(--em2); }
+.cardio { background: var(--card); border-color: var(--line); }
+.shoes, .klass, .nowcard, .creat.done { border-color: var(--line); }
+.meter.prot > div, .meter > div { background: var(--em); }
+.ring { background: conic-gradient(var(--em) calc(var(--p) * 1%), var(--card2) 0); }
+.step button:last-child { border-color: var(--line); color: var(--text); }
+.mrow.on { border-color: var(--em); background: var(--card2); }
+.swapbtn { color: var(--muted); border-color: var(--line); }
+.sched time, .nowcard time, .dayhead .wd { color: var(--em2); }
+.timer { border-color: var(--line); }
+.link, .guide, .offbtn, .manual summary, a { color: var(--em2); }
