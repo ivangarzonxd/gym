@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Plan Retorno</title>
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Plan Retorno">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="titlebar">
+      <div>
+        <h1>Plan Retorno</h1>
+        <p id="week"></p>
+        <span id="sync" class="sync"></span>
+      </div>
+      <button id="reset" class="btn ghost small" data-act="reset-day" hidden>Reiniciar día</button>
+    </div>
+    <div class="goals">
+      <span class="chip core">Barriga</span>
+      <span class="chip fuerza">Fuerza</span>
+      <span class="chip viga">Viga</span>
+      <span class="chip asim">Pecho dcho</span>
+      <span class="chip ante">Antebrazo</span>
+      <span class="chip">Sin lactosa</span>
+    </div>
+    <nav id="tabs" class="tabs"></nav>
+  </header>
+
+  <main id="main"></main>
+
+  <div id="timer" class="timer" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+  <div id="zoom" class="zoom" data-act="zoom-close" hidden><img id="zoomimg" alt=""><span>Toca para cerrar</span></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
