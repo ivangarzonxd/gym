@@ -158,7 +158,14 @@ const CARDIO = {
 // Alimentos por 100 g (o 100 ml). u: [etiqueta de unidad, gramos por unidad]. drinks: consumiciones de alcohol por unidad.
 const FOODS = [
   // Desayuno
-  ['Huevo', 143, 12.6, 0.7, 9.5, ['ud', 55]],
+  ['Huevo frito / revuelto', 180, 13.6, 0.8, 13.5, ['huevo', 50]],
+  ['Huevo cocido', 143, 12.6, 0.7, 9.5, ['huevo', 50]],
+  ['Pan blanco / de molde', 265, 9, 49, 3.2, ['rebanada', 30]],
+  ['Arepa de maíz', 220, 4.5, 45, 2, ['arepa', 80]],
+  ['Cereal de desayuno', 380, 7, 80, 3, ['bol 40 g', 40]],
+  ['ColaCao', 375, 6, 77, 3.6, ['cucharada', 9]],
+  ['Leche sin lactosa semidesnatada', 46, 3.2, 4.7, 1.6, ['vaso 250 ml', 250]],
+  ['Proteína en polvo (batido)', 380, 78, 6, 5, ['cacito', 30]],
   ['Clara de huevo', 52, 11, 0.7, 0.2, ['clara', 33]],
   ['Pan 100% integral', 247, 13, 41, 3.4, ['rebanada', 35]],
   ['Bebida de soja sin azúcar', 33, 3.3, 0.5, 1.8, ['vaso 250 ml', 250]],
@@ -168,7 +175,7 @@ const FOODS = [
   ['Proteína vegetal en polvo (guisante)', 380, 80, 5, 6, ['cacito', 30]],
   ['Café solo / té', 2, 0.1, 0, 0, ['taza', 100]],
   // Fruta
-  ['Plátano', 89, 1.1, 23, 0.3, ['ud', 120]],
+  ['Plátano / banano', 89, 1.1, 23, 0.3, ['ud', 120]],
   ['Manzana', 52, 0.3, 14, 0.2, ['ud', 180]],
   ['Naranja', 47, 0.9, 12, 0.1, ['ud', 200]],
   ['Kiwi', 61, 1.1, 15, 0.5, ['ud', 75]],
@@ -191,6 +198,31 @@ const FOODS = [
   ['Atún en aceite (escurrido)', 198, 26, 0, 10, ['lata', 60]],
   ['Jamón serrano', 240, 30, 0, 13, ['loncha', 15]],
   ['Fiambre de pavo (sin lactosa)', 105, 18, 2, 2, ['loncha', 15]],
+  // Comida de casa (ya cocinada)
+  ['Filete de res (cocinado)', 200, 30, 0, 9, ['filete', 120]],
+  ['Chuleta / carne de cerdo (cocinada)', 230, 27, 0, 13, ['chuleta', 120]],
+  ['Colombina de pollo (muslo, sin hueso)', 215, 27, 0, 11, ['colombina', 75]],
+  ['Presa de pollo (cocinada)', 190, 28, 0, 8, ['presa', 100]],
+  ['Albóndiga casera', 220, 14, 6, 15, ['albóndiga', 30]],
+  ['Salchicha', 290, 12, 3, 26, ['ud', 50]],
+  ['Tocino / panceta (frito)', 450, 18, 1, 42, ['loncha', 15]],
+  ['Garbanzos guisados con salchicha', 150, 7, 15, 7, ['plato', 300]],
+  ['Lentejas guisadas con salchicha', 130, 7, 14, 5, ['plato', 300]],
+  ['Pasta con tocino', 210, 8, 28, 7, ['plato', 350]],
+  ['Arroz blanco cocido (taza)', 130, 2.7, 28, 0.3, ['taza', 150]],
+  ['Patata frita (sartén)', 312, 3.4, 41, 15, ['ración', 100]],
+  ['Patata al horno / airfryer', 150, 3, 27, 3.5, ['ración', 150]],
+  ['Maduro frito (plátano maduro)', 230, 1.5, 38, 9, ['medio maduro', 100]],
+  ['Maduro al horno / airfryer', 140, 1.3, 33, 0.5, ['medio maduro', 100]],
+  // Máquina del trabajo
+  ['Máquina: frutos secos / cacahuetes', 600, 25, 15, 50, ['bolsa', 40]],
+  ['Máquina: barrita de proteínas', 360, 33, 35, 12, ['barrita', 45]],
+  ['Máquina: barrita de cereales', 400, 6, 70, 12, ['barrita', 25]],
+  ['Máquina: patatas fritas / Doritos', 520, 6, 55, 30, ['bolsa', 40]],
+  ['Máquina: chocolatina (KitKat, Twix, Snickers)', 500, 6, 60, 26, ['ud', 45]],
+  ['Máquina: bollería (croissant, Bollycao)', 420, 7, 50, 21, ['ud', 60]],
+  ['Máquina: galletas', 480, 6, 68, 20, ['paquete', 50]],
+  ['Máquina: refresco normal', 42, 0, 10.6, 0, ['lata', 330]],
   // Carbohidrato
   ['Arroz blanco (crudo)', 360, 7, 79, 0.6, ['ración', 80]],
   ['Arroz cocido', 130, 2.7, 28, 0.3, ['plato', 200]],
@@ -228,20 +260,48 @@ const FOODS = [
   ['Cubata con refresco zero', 260, 0, 0, 0, ['cubata (50 ml destilado)', 50], 1.5],
 ];
 
-// Comidas del plan (≈1.900-2.000 kcal y ≈160 g proteína al día). [índice nombre alimento, gramos]
+// Tus comidas habituales con raciones ajustadas (≈2.000 kcal y ≈160 g proteína al día contando los 2 batidos).
+// [nombre del alimento, gramos]
 const PLAN_MEALS = {
-  desayuno: { label: 'Desayuno (antes de entrenar)', opts: [
-    { name: 'A · Huevos y tostadas', items: [['Huevo', 165], ['Clara de huevo', 66], ['Pan 100% integral', 70], ['Bebida de soja sin azúcar', 250], ['Cacao puro desgrasado', 10], ['Plátano', 120]] },
-    { name: 'B · Avena proteica', items: [['Copos de avena', 60], ['Bebida de soja sin azúcar', 300], ['Proteína vegetal en polvo (guisante)', 30], ['Arándanos', 100], ['Nueces', 15]] },
+  desayuno: { label: 'Desayuno · 10:00 (antes del gym)', opts: [
+    { name: 'Huevos, pan y ColaCao', items: [['Huevo frito / revuelto', 100], ['Pan blanco / de molde', 60], ['Leche sin lactosa semidesnatada', 250], ['ColaCao', 18], ['Plátano / banano', 120]] },
+    { name: 'Huevos y cereal', items: [['Huevo frito / revuelto', 100], ['Cereal de desayuno', 40], ['Leche sin lactosa semidesnatada', 250], ['Plátano / banano', 120]] },
+    { name: 'Huevos con arepa', items: [['Huevo frito / revuelto', 100], ['Arepa de maíz', 80], ['Plátano / banano', 120]] },
   ]},
-  almuerzo: { label: 'Almuerzo (después de entrenar)', opts: [
-    { name: 'A · Pollo, arroz y brócoli', items: [['Pechuga de pollo (cruda)', 220], ['Arroz blanco (crudo)', 90], ['Brócoli', 200], ['Aceite de oliva virgen extra', 10]] },
-    { name: 'B · Ternera, patata y ensalada', items: [['Ternera magra (cruda)', 200], ['Patata (cruda)', 350], ['Ensalada (lechuga, tomate, cebolla)', 200], ['Aceite de oliva virgen extra', 10]] },
-    { name: 'C · Lomo, boniato y judías', items: [['Lomo de cerdo (crudo)', 200], ['Boniato (crudo)', 300], ['Judías verdes', 200], ['Aceite de oliva virgen extra', 10]] },
+  batido: { label: 'Batido post-gym · 13:15', opts: [
+    { name: 'Batido + creatina', items: [['Proteína en polvo (batido)', 30]] },
+    { name: 'Batido + banano', items: [['Proteína en polvo (batido)', 30], ['Plátano / banano', 120]] },
   ]},
-  cena: { label: 'Cena (quema-grasa)', opts: [
-    { name: 'A · Merluza y crema de verduras', items: [['Merluza (cruda)', 300], ['Crema de verduras casera sin lácteos', 300], ['Patata (cruda)', 150], ['Aceite de oliva virgen extra', 10]] },
-    { name: 'B · Salmón y espárragos', items: [['Salmón (crudo)', 180], ['Espárragos verdes', 200], ['Arroz blanco (crudo)', 50]] },
-    { name: 'C · Gambas y calabacín', items: [['Gambas / langostinos (crudos)', 250], ['Calabacín', 300], ['Pan 100% integral', 50], ['Aceite de oliva virgen extra', 10]] },
+  almuerzo: { label: 'Almuerzo en casa · 13:45', opts: [
+    { name: 'Arroz, carne y maduro', items: [['Arroz blanco cocido (taza)', 150], ['Filete de res (cocinado)', 150], ['Maduro frito (plátano maduro)', 100], ['Ensalada (lechuga, tomate, cebolla)', 150]] },
+    { name: 'Arroz, 2 colombinas y patata', items: [['Arroz blanco cocido (taza)', 150], ['Colombina de pollo (muslo, sin hueso)', 150], ['Patata frita (sartén)', 100]] },
+    { name: 'Albóndigas, arroz y patata', items: [['Albóndiga casera', 180], ['Arroz blanco cocido (taza)', 150], ['Patata frita (sartén)', 100]] },
+    { name: 'Garbanzos con salchicha y arroz', items: [['Garbanzos guisados con salchicha', 300], ['Arroz blanco cocido (taza)', 100], ['Huevo cocido', 50]] },
+    { name: 'Lentejas con salchicha y arroz', items: [['Lentejas guisadas con salchicha', 300], ['Arroz blanco cocido (taza)', 100], ['Huevo cocido', 50]] },
+    { name: 'Pasta con tocino', items: [['Pasta con tocino', 350], ['Atún al natural (escurrido)', 60]] },
+  ]},
+  merienda: { label: 'Merienda en el trabajo · 18:00', opts: [
+    { name: '2º batido (shaker de casa)', items: [['Proteína en polvo (batido)', 30]] },
+    { name: 'Atún con pan', items: [['Atún al natural (escurrido)', 60], ['Pan blanco / de molde', 60]] },
+    { name: 'Máquina: frutos secos', items: [['Máquina: frutos secos / cacahuetes', 40]] },
+    { name: 'Máquina: barrita proteica', items: [['Máquina: barrita de proteínas', 45]] },
+  ]},
+  cena: { label: 'Cena · 21:45 (al salir del trabajo)', opts: [
+    { name: 'Atún con arroz', items: [['Atún al natural (escurrido)', 120], ['Arroz blanco cocido (taza)', 150], ['Aceite de oliva virgen extra', 5], ['Ensalada (lechuga, tomate, cebolla)', 100]] },
+    { name: '3 huevos con pan', items: [['Huevo frito / revuelto', 150], ['Pan blanco / de molde', 60]] },
+    { name: '3 huevos con arepa', items: [['Huevo frito / revuelto', 150], ['Arepa de maíz', 80]] },
   ]},
 };
+
+// Tu día tipo (gym 11-13, trabajo 15-21). [hora, qué, detalle]
+const SCHEDULE = [
+  ['09:30', 'Levántate', 'Vaso grande de agua. Mismo horario también los días sin gym.'],
+  ['10:00', 'Desayuno', 'Huevos + pan, arepa o cereal + banano. Energía para entrenar.'],
+  ['11:00', 'Gym', 'Pesas + cinta. Lleva 1 L de agua.'],
+  ['13:15', 'Batido + creatina', '1 cacito de proteína + 5 g de creatina en agua, al salir del gym.'],
+  ['13:45', 'Almuerzo', 'Tu plato de casa con las raciones del "plato de entreno".'],
+  ['15:00', 'Trabajo', 'Lleva el shaker con el polvo ya puesto y una fruta.'],
+  ['18:00', 'Merienda', '2º batido (solo añades agua). Si es máquina: frutos secos o barrita proteica.'],
+  ['21:45', 'Cena', 'Atún con arroz o 3 huevos con pan. Proteína primero.'],
+  ['01:00', 'Dormir', '8 h de sueño: durmiendo poco la barriga baja mucho peor.'],
+];

@@ -220,9 +220,32 @@ function foodTotals(date = TODAY()) {
 }
 function makeFoodEntry(food, grams, meal) {
   const [name, kcal, p, c, f, u, drinks] = food;
+  const it = { id: uid(), meal, name, per: [kcal, p, c, f, drinks ? drinks / u[1] : 0], u };
+  return setGrams(it, grams);
+}
+function setGrams(it, grams) {
+  const [kcal, p, c, f, dpg] = it.per;
   const k = grams / 100;
-  return { id: uid(), meal, name, g: grams, kcal: Math.round(kcal * k), p: +(p * k).toFixed(1), c: +(c * k).toFixed(1), f: +(f * k).toFixed(1),
-    drinks: drinks ? +(drinks * grams / u[1]).toFixed(2) : 0 };
+  return Object.assign(it, { g: grams, kcal: Math.round(kcal * k), p: +(p * k).toFixed(1), c: +(c * k).toFixed(1), f: +(f * k).toFixed(1), drinks: +(dpg * grams).toFixed(2) });
+}
+const MEALS = ['desayuno', 'batido', 'almuerzo', 'merienda', 'cena', 'extra'];
+const MEAL_NAME = { desayuno: 'Desayuno', batido: 'Batido post-gym', almuerzo: 'Almuerzo', merienda: 'Merienda (trabajo)', cena: 'Cena', extra: 'Extras y bebidas' };
+// Comida que toca según la hora
+function mealByHour(d = new Date()) {
+  const m = d.getHours() * 60 + d.getMinutes();
+  if (m < 300) return 'cena'; // después de medianoche
+  if (m < 13 * 60) return 'desayuno';
+  if (m < 13 * 60 + 30) return 'batido';
+  if (m < 15 * 60) return 'almuerzo';
+  if (m < 21 * 60) return 'merienda';
+  return 'cena';
+}
+function nextScheduleItem() {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const toM = (t) => { const [h, m] = t.split(':').map(Number); return (h < 5 ? h + 24 : h) * 60 + m; };
+  const cur = mins < 300 ? mins + 1440 : mins;
+  return SCHEDULE.find((s) => toM(s[0]) >= cur - 15) || SCHEDULE[0];
 }
 function weekDrinks() {
   const today = TODAY();
@@ -403,6 +426,7 @@ function viewHoy() {
 
   return `
   ${next}
+  ${(() => { const [h, what, det] = nextScheduleItem(); return `<div class="card nowcard"><time>${h}</time><div><b>${esc(what)}</b><p>${esc(det)}</p></div></div>`; })()}
   <div class="card phase"><b>${ph.label} · RIR ${ph.rir}</b><p>${ph.tip}</p></div>
 
   <div class="card">
@@ -543,8 +567,9 @@ function viewComida() {
   const kt = kcalTarget();
   const ft = foodTotals();
   const list = foodOf(date);
-  const meals = ['desayuno', 'almuerzo', 'cena', 'extra'];
-  const mealName = { desayuno: 'Desayuno', almuerzo: 'Almuerzo', cena: 'Cena', extra: 'Extras y bebidas' };
+  const meals = MEALS;
+  const mealName = MEAL_NAME;
+  const cur = mealByHour();
   const left = kt.target - ft.kcal;
   return `
   <div class="card">
@@ -556,10 +581,10 @@ function viewComida() {
   </div>
 
   <div class="card">
-    <h3>⚡ Registro rápido: comidas del plan</h3>
-    <p class="hint">Un toque y se apunta todo con sus gramos. Si cambias algo, bórralo abajo y añádelo a mano.</p>
+    <h3>⚡ Registro rápido: tus comidas</h3>
+    <p class="hint">Un toque y se apunta con las raciones del plan. ¿Comiste distinto? Cambia los gramos abajo (o usa los botones de unidades) o borra lo que no comiste.</p>
     ${Object.entries(PLAN_MEALS).map(([k, m]) => `
-      <div class="planmeal"><small>${m.label}</small><div class="opts">${m.opts.map((o, i) => {
+      <div class="planmeal ${k === cur ? 'now' : ''}"><small>${m.label}${k === cur ? ' · <b>ahora</b>' : ''}</small><div class="opts">${m.opts.map((o, i) => {
         const kc = o.items.reduce((a, [n, g]) => a + (FOOD_BY_NAME[n][1] * g) / 100, 0);
         return `<button class="opt" data-act="plan-meal" data-meal="${k}" data-i="${i}"><b>${esc(o.name)}</b><span>${Math.round(kc)} kcal</span></button>`;
       }).join('')}</div></div>`).join('')}
@@ -568,8 +593,8 @@ function viewComida() {
   <div class="card">
     <h3>➕ Añadir alimento</h3>
     <div class="grid2">
-      <label class="field"><span>Comida</span><select id="f-meal">${meals.map((m) => `<option value="${m}">${mealName[m]}</option>`).join('')}</select></label>
-      <label class="field"><span>Buscar</span><input id="f-q" type="search" placeholder="pollo, arroz, cerveza…" autocomplete="off"></label>
+      <label class="field"><span>Comida</span><select id="f-meal">${meals.map((m) => `<option value="${m}" ${m === cur ? 'selected' : ''}>${mealName[m]}</option>`).join('')}</select></label>
+      <label class="field"><span>Buscar</span><input id="f-q" type="search" placeholder="colombina, arroz, máquina…" autocomplete="off"></label>
     </div>
     <div id="f-res" class="results"></div>
     <details class="manual"><summary>Plato fuera de casa / a ojo (kcal manual)</summary>
@@ -587,7 +612,17 @@ function viewComida() {
     const items = list.filter((x) => x.meal === m);
     if (!items.length) return '';
     const kc = items.reduce((a, x) => a + x.kcal, 0);
-    return `<div class="card"><div class="row"><h3>${mealName[m]}</h3><b>${kc} kcal</b></div><ul class="food">${items.map((x) => `<li><span>${esc(x.name)} <em>${x.g ? x.g + ' g' : ''}</em></span><span>${x.kcal} kcal · ${fmt(x.p, 0)} P</span><button data-act="food-del" data-id="${x.id}" aria-label="Borrar">✕</button></li>`).join('')}</ul></div>`;
+    return `<div class="card"><div class="row"><h3>${mealName[m]}</h3><b>${kc} kcal</b></div><ul class="food">${items.map((x) => {
+      const units = x.u && x.g ? x.g / x.u[1] : 0;
+      const ulabel = units ? ` <em>≈ ${fmt(units, 1)} ${esc(x.u[0])}</em>` : '';
+      return `<li>
+        <span>${esc(x.name)}${ulabel}</span>
+        ${x.per ? `<label class="fg"><input type="number" inputmode="decimal" data-food-g="${x.id}" value="${x.g}"><i>g</i></label>` : '<span></span>'}
+        <span>${x.kcal} kcal · ${fmt(x.p, 0)} P</span>
+        <button data-act="food-del" data-id="${x.id}" aria-label="Borrar">✕</button>
+        ${x.per && x.u ? `<div class="fu"><button data-act="food-units" data-id="${x.id}" data-d="-1">− 1 ${esc(x.u[0])}</button><button data-act="food-units" data-id="${x.id}" data-d="1">+ 1 ${esc(x.u[0])}</button></div>` : ''}
+      </li>`;
+    }).join('')}</ul></div>`;
   }).join('')}
 
   ${nutritionGuide()}`;
@@ -595,7 +630,48 @@ function viewComida() {
 
 function nutritionGuide() {
   return `
-  <h2 class="sec">📖 Tu plan sin lactosa</h2>
+  <h2 class="sec">🕐 Tu día tipo</h2>
+  <div class="card">
+    <ul class="sched">${SCHEDULE.map(([h, t, d]) => `<li><time>${h}</time><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>
+    <p class="hint">Días sin gym: mismo horario. El batido + creatina lo tomas con el almuerzo.</p>
+  </div>
+
+  <div class="card">
+    <h3>🍽️ El plato de entreno (tu comida de siempre, ajustada)</h3>
+    <ul class="tips">
+      <li><b>Proteína: que ocupe la palma entera y sea gruesa.</b> 2 colombinas (no 1), 5-6 albóndigas (no 3-4), un filete grande. Es lo que más te falta.</li>
+      <li><b>Arroz: 1 taza</b> (lo que cabe en tu puño cerrado, un poco más). No un montón.</li>
+      <li><b>Patata frita O maduro, no los dos.</b> Si se puede en airfryer u horno, ahorras 150-200 kcal.</li>
+      <li><b>Legumbres con salchicha:</b> 1 salchicha como mucho y añade un huevo cocido o algo de pollo.</li>
+      <li><b>Pasta con tocino:</b> poco tocino y añade una lata de atún o pollo.</li>
+      <li><b>Ensalada cuando haya</b>: llena sin sumar casi nada. Tomate y cebolla también valen.</li>
+      <li>Primero come la proteína, luego el resto. Si te llenas, que sobre arroz, no carne.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>🥤 Proteína en polvo y creatina</h3>
+    <ul class="tips">
+      <li><b>Proteína: 2 cacitos al día</b> (≈30 g de polvo, ≈24 g de proteína cada uno; mira la etiqueta). Uno al salir del gym (13:15) y otro a media tarde en el trabajo (18:00).</li>
+      <li>Con agua. Llévalo al trabajo en el shaker con el polvo ya puesto: allí solo añades agua y agitas.</li>
+      <li>Si tu proteína es <b>whey concentrada</b>, lleva algo de lactosa. Si te da gases, cámbiala por <b>whey isolate</b> (aislada) o vegetal.</li>
+      <li><b>Creatina monohidrato: 5 g todos los días</b>, también los de descanso, sin fase de carga. La hora no importa; te la pongo en el batido post-gym para no olvidarla.</li>
+      <li>Con creatina bebe tus 3 L de agua. Los primeros días puedes subir 1-1,5 kg en la báscula: es agua dentro del músculo, no grasa. Fíate de la cintura.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>🏪 La máquina del trabajo</h3>
+    <p class="hint">Lo mejor es no necesitarla: shaker con proteína + un banano o una lata de atún con pan desde casa.</p>
+    <table class="rules">
+      <tr><td>✅ Mejor</td><td><b>Barrita de proteínas</b> (≈160 kcal, 15 g prot.) · <b>frutos secos/cacahuetes</b> naturales o tostados (≈240 kcal, 10 g prot.)</td></tr>
+      <tr><td>🟡 Si no hay otra</td><td>Barrita de cereales (≈100 kcal) · bolsa pequeña de patatas (≈200 kcal)</td></tr>
+      <tr><td>❌ Evita</td><td>Bollería, chocolatinas, galletas y refrescos normales: 220-300 kcal de azúcar sin proteína, y a la hora tienes más hambre</td></tr>
+    </table>
+    <p class="hint">Bebida: agua, café o refresco zero. Ojo: muchas barritas y chocolatinas llevan leche (lactosa).</p>
+  </div>
+
+  <h2 class="sec">📖 Raciones de tus comidas</h2>
   ${Object.values(PLAN_MEALS).map((m) => `
   <div class="card">
     <h3>${m.label}</h3>
@@ -605,10 +681,11 @@ function nutritionGuide() {
   <div class="card">
     <h3>📏 Cómo medir sin volverte loco</h3>
     <ul class="tips">
-      <li>Pesa en <b>crudo</b> la carne, el pescado, el arroz y la pasta: es como están los gramos de la app.</li>
-      <li>Las 2 primeras semanas usa báscula de cocina. Después ya sabrás calcular a ojo.</li>
-      <li>¿Te toca más de 2.000 kcal? Añade 40 g de arroz crudo (+145 kcal) en el almuerzo o una fruta.</li>
-      <li>Si un día comes fuera, usa el registro manual con la referencia más parecida. Mejor aproximado que no apuntar.</li>
+      <li>Los gramos de tus platos de casa son <b>ya cocinados</b>: pesa lo que va al plato.</li>
+      <li>La primera semana pesa tu plato de arroz y tu ración de carne con una báscula de cocina; después ya lo calculas a ojo.</li>
+      <li>Si comiste distinto, toca <b>+1 / −1</b> (colombina, albóndiga, taza…) en lo registrado. No hace falta ser exacto.</li>
+      <li>¿Te toca más de 2.000 kcal? Media taza más de arroz (+100 kcal) o una fruta.</li>
+      <li>Si comes fuera, usa el registro manual con la referencia más parecida. Mejor aproximado que no apuntar.</li>
     </ul>
   </div>
 
@@ -619,8 +696,7 @@ function nutritionGuide() {
       <li><b>Pasos:</b> 8.000-10.000 al día con el Watch. Es lo que más grasa abdominal quema fuera del gym.</li>
       <li><b>Sueño:</b> 7-8 h. Dormir poco sube el cortisol y la grasa se acumula en la barriga.</li>
       <li><b>Sal y ultraprocesados:</b> reducirlos deshincha la cintura en días.</li>
-      <li><b>Lactosa oculta:</b> embutidos, pan de molde, salsas, purés de sobre y bollería. Lee las etiquetas.</li>
-      <li><b>Creatina monohidrato 5 g/día</b> (opcional, sin lactosa): ayuda a recuperar fuerza antes. Con agua, a cualquier hora.</li>
+      <li><b>Lactosa oculta:</b> embutidos, salchichas, pan de molde, salsas y bollería. Lee las etiquetas. La leche "sin lactosa" sí puedes tomarla.</li>
     </ul>
   </div>
 
@@ -850,6 +926,14 @@ document.addEventListener('click', async (e) => {
     const [it] = list.splice(idx, 1);
     queueFood(today, it, true); save(); render(); return;
   }
+  if (act === 'food-units') {
+    const it = foodOf().find((x) => x.id === t.dataset.id);
+    if (!it?.per) return;
+    const g = Math.max(0, it.g + it.u[1] * +t.dataset.d);
+    if (g === 0) { foodOf().splice(foodOf().indexOf(it), 1); queueFood(today, it, true); }
+    else { setGrams(it, g); queueFood(today, it); }
+    save(); const y = window.scrollY; render(); window.scrollTo(0, y); return;
+  }
   if (act === 'off-search') { t.remove(); offSearch(t.dataset.q); return; }
   if (act === 'cfg-save') {
     S.cfg.url = $('#c-url').value.trim(); S.cfg.token = $('#c-token').value.trim(); save();
@@ -894,6 +978,12 @@ document.addEventListener('change', (e) => {
     s[el.dataset.f] = num(el.value);
     if (s.done) queueSet(today, day, slug, i, s);
     save();
+  } else if (el.dataset.foodG) {
+    const it = foodOf().find((x) => x.id === el.dataset.foodG);
+    const g = num(el.value);
+    if (!it?.per || g == null) return;
+    setGrams(it, g); queueFood(today, it); save();
+    const y = window.scrollY; render(); window.scrollTo(0, y);
   } else if (el.dataset.daily) {
     dailyOf()[el.dataset.daily] = num(el.value);
     queueDaily(today); save(); render();
