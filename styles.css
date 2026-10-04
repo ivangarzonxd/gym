@@ -41,9 +41,9 @@ input::placeholder { color: #a3aab8; }
 
 /* Cabecera y barra inferior */
 .top {
-  position: sticky; top: 0; z-index: 20;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
   display: flex; justify-content: space-between; align-items: center;
-  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  padding: calc(env(safe-area-inset-top) + 6px) 16px 10px;
   background: #fff;
   border-bottom: 1px solid var(--line);
 }
@@ -63,7 +63,7 @@ input::placeholder { color: #a3aab8; }
 .nv svg { width: 24px; height: 24px; }
 .nv.on { color: var(--text); }
 
-main { padding: 12px 16px 24px; max-width: 640px; margin: 0 auto; }
+main { padding: calc(env(safe-area-inset-top) + 56px) 16px 24px; max-width: 640px; margin: 0 auto; }
 
 /* Bloques */
 .panel { border: 1px solid var(--line); border-radius: var(--r); padding: 16px; margin-bottom: 12px; background: var(--bg); }
