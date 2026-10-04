@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Gym Vancho</title>
-  <meta name="theme-color" content="#0b0f14">
+  <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Gym Vancho">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/icon-192.png">
@@ -16,18 +16,13 @@
 </head>
 <body>
   <header class="top">
-    <div class="titlebar">
-      <div>
-        <h1>Gym Vancho</h1>
-        <p id="week"></p>
-        <span id="sync" class="sync"></span>
-      </div>
-      <button id="reset" class="btn ghost small" data-act="reset-day" hidden>Reiniciar día</button>
-    </div>
-    <nav id="tabs" class="tabs"></nav>
+    <h1 id="title">Gym Vancho</h1>
+    <span id="sync" class="sync"></span>
   </header>
 
   <main id="main"></main>
+
+  <nav id="nav" class="nav"></nav>
 
   <div id="timer" class="timer" hidden></div>
   <div id="toast" class="toast" hidden></div>

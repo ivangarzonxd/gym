@@ -346,10 +346,10 @@ function renderSync() {
   const el = $('#sync');
   if (!el) return;
   const pending = Object.keys(S.queue).length;
-  if (!S.cfg.url) { el.className = 'sync off'; el.textContent = 'Sheets: sin configurar'; return; }
-  if (syncing) { el.className = 'sync busy'; el.textContent = 'Sincronizando…'; return; }
-  if (pending) { el.className = 'sync warn'; el.textContent = `${pending} pendiente${pending > 1 ? 's' : ''}${navigator.onLine ? '' : ' · sin conexión'}`; return; }
-  el.className = 'sync ok'; el.textContent = 'Sheets al día';
+  if (!S.cfg.url) { el.className = 'sync off'; el.textContent = ''; return; }
+  if (syncing) { el.className = 'sync busy'; el.textContent = 'Guardando…'; return; }
+  if (pending) { el.className = 'sync warn'; el.textContent = navigator.onLine ? 'Pendiente' : 'Sin conexión'; return; }
+  el.className = 'sync ok'; el.textContent = 'Guardado';
 }
 
 // ---------- Temporizador de descanso ----------
@@ -384,112 +384,124 @@ function startTimer(sec, label) {
 }
 
 // ---------- Render ----------
-const TABS = [
-  { id: 'hoy', label: 'Hoy' },
-  ...DAYS.map((d) => ({ id: d.id, label: `${d.short} ${d.title}` })),
-  { id: 'comida', label: 'Comida' },
-  { id: 'metodo', label: 'Método' },
-  { id: 'ajustes', label: 'Ajustes' },
-];
+const ICONS = {
+  hoy: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  entreno: '<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>',
+  comida: '<path d="M7 3v7a2 2 0 0 0 4 0V3M9 12v9M16.5 3C15 3 14 5 14 8s1 4 2.5 4V21"/>',
+  ajustes: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+};
+const NAV = [['hoy', 'Hoy'], ['entreno', 'Entreno'], ['comida', 'Comida'], ['ajustes', 'Ajustes']];
+const svg = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+let selDay = null; // día elegido en Entreno
+let openEx = null; // ejercicio desplegado (null = el primero sin terminar)
 
 function render() {
-  const tab = S.tab;
-  $('#tabs').innerHTML = TABS.map((t) => `<button class="tab ${t.id === tab ? 'on' : ''} ${t.id === 'd5' ? 'opt' : ''}" data-tab="${t.id}">${esc(t.label)}</button>`).join('');
-  $('#reset').hidden = !DAY_BY_ID[tab];
-  const ph = phase();
-  $('#week').textContent = `Semana ${planWeek()} · ${ph.label} · RIR ${ph.rir}`;
+  if (!NAV.some(([id]) => id === S.tab)) S.tab = 'hoy';
+  $('#nav').innerHTML = NAV.map(([id, l]) => `<button class="nv ${S.tab === id ? 'on' : ''}" data-tab="${id}">${svg(ICONS[id])}<span>${l}</span></button>`).join('');
+  $('#title').textContent = S.tab === 'hoy' ? 'Gym Vancho' : NAV.find(([id]) => id === S.tab)[1];
   const main = $('#main');
-  if (tab === 'hoy') main.innerHTML = viewHoy();
-  else if (DAY_BY_ID[tab]) main.innerHTML = viewDay(DAY_BY_ID[tab]);
-  else if (tab === 'comida') main.innerHTML = viewComida();
-  else if (tab === 'metodo') main.innerHTML = viewMetodo();
-  else main.innerHTML = viewAjustes();
+  main.innerHTML = S.tab === 'hoy' ? viewHoy() : S.tab === 'entreno' ? viewEntreno() : S.tab === 'comida' ? viewComida() : viewAjustes();
   renderSync();
-  const on = $('#tabs .on');
-  on?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
 }
 
 function bar(value, max, cls = '') {
   const pct = Math.min(100, (value / max) * 100 || 0);
   return `<div class="meter ${cls}"><div style="width:${pct}%"></div></div>`;
 }
+function weekStart(k = TODAY()) { return addDays(k, -((parseD(k).getDay() + 6) % 7)); }
+function doneThisWeek(dayId) { const ws = weekStart(); return trainedDays().some((t) => t.day === dayId && t.date >= ws); }
+function scheduleHtml() {
+  return `<ul class="sched">${SCHEDULE.map(([h, t, d, end]) => `<li><time>${h}${end ? '–' + end : ''}</time><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`;
+}
 
+// ---------- Hoy ----------
 function viewHoy() {
   const today = TODAY();
+  const now = new Date();
+  const wd = now.getDay();
   const nd = nextDay();
-  const d = DAY_BY_ID[nd.day];
+  const planned = DAYS.find((d) => d.wdn === wd);
   const ph = phase();
   const kt = kcalTarget();
   const ft = foodTotals();
   const dl = dailyOf();
   const wt = weightTrend();
   const drinks = weekDrinks();
-  const gripWeek = (() => { let n = 0; const dow = (parseD(today).getDay() + 6) % 7; for (let i = 0; i <= dow; i++) if (S.daily[addDays(today, -i)]?.grip) n++; return n; })();
-  const recent = trainedDays().reverse().slice(0, 6);
+  const gripWeek = (() => { let n = 0; const ws = weekStart(); for (let k = ws; k <= today; k = addDays(k, 1)) if (S.daily[k]?.grip) n++; return n; })();
+  const doneToday = trainedDays().filter((t) => t.date === today);
+  const [h, what, det, end] = nextScheduleItem();
 
-  let next;
-  if (nd.doneToday?.length) next = `<div class="hero done"><small>Hoy</small><h2>✔ Entrenado: ${nd.doneToday.map((t) => DAY_BY_ID[t.day].short + ' ' + DAY_BY_ID[t.day].title).join(' + ')}</h2><p>Próximo: <b>${d.short} · ${d.title}</b>. Ahora toca comer bien y descansar.</p></div>`;
-  else if (nd.rest) next = `<div class="hero rest"><small>Recomendación</small><h2>Hoy descansa 😴</h2><p>Llevas 3 días seguidos. Caminata de 30-45 min y estiramientos. Próximo: <b>${d.short} · ${d.title}</b>.</p><button class="btn ghost" data-tab="${d.id}">Entrenar igualmente</button></div>`;
-  else {
-    const wdToday = new Date().getDay();
-    const planned = DAYS.find((x) => x.wdn === wdToday);
-    const first = !trainedDays().length;
-    const note = first && wdToday !== 1 ? '<p class="small">Lo ideal es arrancar el lunes con el D1 para cuadrar la semana (si quieres empezar hoy, adelante).</p>'
-      : planned && planned.id !== d.id ? `<p class="small">Por calendario hoy sería ${planned.short} · ${planned.title}; sigues el orden y no te saltas nada.</p>` : '';
-    next = `<div class="hero"><small>Te toca · ${d.wd}</small><h2>${d.short} · ${d.title}</h2><p>${esc(d.sub)}</p><p class="small">${SHOES[d.shoes]}</p>${note}<button class="btn" data-tab="${d.id}">Empezar entrenamiento →</button></div>`;
+  let training;
+  if (doneToday.length) {
+    const d = DAY_BY_ID[doneToday[0].day];
+    training = `<span class="eyebrow">Entreno de hoy</span><div class="row"><h2>${d.title}</h2><span class="tick">✓</span></div>
+      <p class="muted">Hecho: ${dayDone(today, d.id)} series. Ahora toca comer bien y descansar.</p>
+      <button class="btn ghost block" data-act="go-day" data-day="${d.id}">Ver entreno</button>`;
+  } else if (!planned) {
+    const d = DAY_BY_ID[nd.day];
+    training = `<span class="eyebrow">Hoy</span><h2>Descanso</h2>
+      <p class="muted">${wd === 3 ? 'Caminata de 30-45 min o clase de Movilidad / Stretching. Gripper en casa.' : 'Descanso total. Gripper en casa.'}</p>
+      <p class="muted small">Próximo entreno: ${d.wd}, ${d.title}.</p>`;
+  } else {
+    const d = DAY_BY_ID[nd.day];
+    const after = d.cardio === 'intervalos' ? 'Correr 25 min al terminar' : '10 min caminando' + (d.klass ? ' + clase (' + d.klass + ')' : '');
+    training = `<span class="eyebrow">Entreno de hoy${d.id !== planned.id ? ' · te toca por orden' : ''}</span>
+      <h2>${d.title}</h2><p class="muted">${esc(d.sub)}</p>
+      <dl class="facts">
+        <div><dt>Horario</dt><dd>11:00 – 13:00</dd></div>
+        <div><dt>Zapatillas</dt><dd>${d.shoes === 'run' ? 'De correr' : 'Planas (Converse / Vans)'}</dd></div>
+        <div><dt>Al terminar</dt><dd>${esc(after)}</dd></div>
+        <div><dt>Intensidad</dt><dd>RIR ${ph.rir} · ${ph.label}</dd></div>
+      </dl>
+      <button class="btn block" data-act="go-day" data-day="${d.id}">Empezar entreno</button>`;
   }
 
   return `
-  ${next}
-  ${(() => { const [h, what, det] = nextScheduleItem(); return `<div class="card nowcard"><time>${h}</time><div><b>${esc(what)}</b><p>${esc(det)}</p></div></div>`; })()}
-  <div class="card creat ${dl.creatine ? 'done' : ''}"><div><b>💊 Creatina 5 g</b><p class="hint">Todos los días. Con el batido post-gym o con el almuerzo.</p></div><button class="btn small ${dl.creatine ? 'on' : 'ghost'}" data-act="creatine">${dl.creatine ? '✔ Tomada' : 'Marcar'}</button></div>
-  <div class="card phase"><b>${ph.label} · RIR ${ph.rir}</b><p>${ph.tip}</p></div>
+  <section class="hero-img ${S.goalImg ? '' : 'empty'}">
+    ${S.goalImg ? `<img src="${S.goalImg}" alt="Mi meta">` : ''}
+    <label class="hero-empty"><input type="file" accept="image/*" id="goalimg" hidden><b>Añade tu imagen de meta</b><span>Toca para elegirla de tus fotos</span></label>
+    <div class="hero-ov"><span>${cap(now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</span><b>Semana ${planWeek()} · ${ph.label}</b></div>
+  </section>
 
-  <div class="card">
-    <div class="row"><h3>🔥 Calorías de hoy</h3><button class="link" data-tab="comida">Registrar comida →</button></div>
-    <div class="big">${fmt(ft.kcal, 0)} <small>/ ${fmt(kt.target, 0)} kcal</small></div>
-    ${bar(ft.kcal, kt.target, ft.kcal > kt.target ? 'over' : '')}
-    <div class="macros">
-      <span>Proteína <b>${fmt(ft.p, 0)}/${PROTEIN_G} g</b></span>
-      <span>Hidratos <b>${fmt(ft.c, 0)} g</b></span>
-      <span>Grasa <b>${fmt(ft.f, 0)}/${FAT_G} g</b></span>
+  <section class="panel">${training}</section>
+
+  <section class="panel">
+    <span class="eyebrow">Ahora</span>
+    <div class="now"><time>${h}${end ? '–' + end : ''}</time><div><b>${esc(what)}</b><p class="muted">${esc(det)}</p></div></div>
+    <details class="more"><summary>Ver horario del día</summary>${scheduleHtml()}</details>
+  </section>
+
+  <section class="panel">
+    <div class="row"><span class="eyebrow">Comida</span><button class="link" data-tab="comida">Añadir comida</button></div>
+    <div class="kpis">
+      <div><b>${fmt(ft.kcal, 0)}</b><span>de ${fmt(kt.target, 0)} kcal</span></div>
+      <div><b>${fmt(ft.p, 0)} g</b><span>de ${PROTEIN_G} g de proteína</span></div>
     </div>
-    ${bar(ft.p, PROTEIN_G, 'prot')}
-    <label class="field">
-      <span>⌚ Calorías activas del Watch <em>(app Fitness → anillo rojo "Moverse")</em></span>
-      <input type="number" inputmode="numeric" data-daily="active" value="${dl.active ?? ''}" placeholder="ej. 650">
-    </label>
-    <p class="hint">${kt.provisional ? 'Objetivo provisional (cuento 500 kcal activas). Mételas por la noche o cuando quieras: se recalcula.' : `Objetivo = ${BASE_KCAL}${S.kcalAdjust ? (S.kcalAdjust > 0 ? ' + ' : ' − ') + Math.abs(S.kcalAdjust) : ''} + mitad de ${kt.active} activas.`}</p>
-  </div>
+    ${bar(ft.kcal, kt.target, ft.kcal > kt.target ? 'over' : '')}
+    ${bar(ft.p, PROTEIN_G)}
+  </section>
 
-  <div class="card">
-    <h3>⚖️ Peso y cintura <small>(1 vez por semana, en ayunas)</small></h3>
+  <section class="panel">
+    <span class="eyebrow">Hábitos de hoy</span>
+    <button class="check" data-act="creatine"><span class="cb ${dl.creatine ? 'on' : ''}"></span><span><b>Creatina 5 g</b><small>Con el batido post-gym o con el almuerzo</small></span></button>
+    <button class="check" data-act="grip"><span class="cb ${dl.grip ? 'on' : ''}"></span><span><b>Gripper en casa</b><small>${gripWeek} de 3 días esta semana · 4 series al fallo</small></span></button>
+    <div class="check static"><span class="val ${drinks > 4 ? 'bad' : ''}">${fmt(drinks, 1)}</span><span><b>Alcohol esta semana</b><small>Máximo 4 consumiciones · se cuenta al registrarlo en Comida</small></span></div>
+  </section>
+
+  <section class="panel">
+    <span class="eyebrow">Watch y báscula</span>
+    <label class="field"><span>Calorías activas del Watch (app Fitness, anillo rojo)</span>
+      <input type="number" inputmode="numeric" data-daily="active" value="${dl.active ?? ''}" placeholder="Ej. 650"></label>
+    <p class="muted small">${kt.provisional ? 'Mientras no lo metas, cuento 500. Puedes ponerlo cuando quieras y el objetivo se recalcula.' : `Objetivo de hoy: ${BASE_KCAL}${S.kcalAdjust ? (S.kcalAdjust > 0 ? ' + ' : ' − ') + Math.abs(S.kcalAdjust) : ''} + la mitad de ${kt.active} = ${kt.target} kcal.`}</p>
     <div class="grid2">
       <label class="field"><span>Peso (kg)</span><input type="number" inputmode="decimal" step="0.1" data-daily="weight" value="${dl.weight ?? ''}" placeholder="80,0"></label>
-      <label class="field"><span>Cintura en el ombligo (cm)</span><input type="number" inputmode="decimal" step="0.5" data-daily="waist" value="${dl.waist ?? ''}" placeholder="—"></label>
+      <label class="field"><span>Cintura (cm)</span><input type="number" inputmode="decimal" step="0.5" data-daily="waist" value="${dl.waist ?? ''}" placeholder="A la altura del ombligo"></label>
     </div>
+    <p class="muted small">Peso y cintura: una vez por semana, en ayunas.</p>
     ${spark(wt.pts)}
-    ${wt.action ? `<div class="alert">${wt.action.text}<button class="btn small" data-act="adjust" data-delta="${wt.action.delta}">Aplicar ${wt.action.delta > 0 ? '+' : ''}${wt.action.delta} kcal</button></div>` : wt.msg ? `<p class="hint ok">${wt.msg}</p>` : `<p class="hint">Con 2 semanas de pesajes la app te dirá si ajustar calorías.</p>`}
-  </div>
-
-  <div class="grid2">
-    <div class="card mini ${drinks > 4 ? 'bad' : ''}">
-      <h4>🍺 Alcohol semana</h4>
-      <div class="big">${fmt(drinks, 1)} <small>/ 4</small></div>
-      <p class="hint">Se cuenta solo al registrar bebidas en Comida.</p>
-    </div>
-    <div class="card mini">
-      <h4>✊ Hand grip en casa</h4>
-      <div class="big">${gripWeek} <small>/ 3 días</small></div>
-      <button class="btn small ${dl.grip ? 'on' : 'ghost'}" data-act="grip">${dl.grip ? '✔ Hecho hoy' : 'Marcar hoy'}</button>
-      <p class="hint">4 series al fallo. Mejor en días de pierna o descanso.</p>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>📅 Últimos entrenamientos</h3>
-    ${recent.length ? `<ul class="list">${recent.map((t) => `<li><span>${parseD(t.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</span><b>${DAY_BY_ID[t.day].short} ${DAY_BY_ID[t.day].title}</b><em>${dayDone(t.date, t.day)} series</em></li>`).join('')}</ul>` : '<p class="hint">Aún no hay entrenamientos. ¡Hoy empieza todo!</p>'}
-  </div>`;
+    ${wt.action ? `<div class="alert">${wt.action.text}<button class="btn small" data-act="adjust" data-delta="${wt.action.delta}">Aplicar ${wt.action.delta > 0 ? '+' : ''}${wt.action.delta} kcal</button></div>` : wt.msg ? `<p class="ok small">${wt.msg}</p>` : ''}
+  </section>`;
 }
 
 function spark(pts) {
@@ -503,89 +515,120 @@ function spark(pts) {
   <div class="sparklbl"><span>${fmt(ws[0])} kg</span><span>${fmt(ws[ws.length - 1])} kg</span></div>`;
 }
 
-function viewDay(day) {
+// ---------- Entreno ----------
+function viewEntreno() {
   const today = TODAY();
-  const done = dayDone(today, day.id);
+  if (!selDay) { const p = DAYS.find((d) => d.wdn === new Date().getDay()); selDay = p ? p.id : nextDay().day; }
+  const day = DAY_BY_ID[selDay];
   const rows = day.ex.map((r, idx) => slotRow(day, idx));
-  const total = rows.reduce((a, r) => a + prescribe(day.id, r).sets, 0);
+  const prs = rows.map((r) => prescribe(day.id, r));
+  const total = prs.reduce((a, p) => a + p.sets, 0);
+  const done = dayDone(today, day.id);
+  const ph = phase();
   const week = planWeek();
   const cardio = CARDIO[day.cardio].find((c) => week >= c.weeks[0] && week <= c.weeks[1]);
+  if (openEx === null) {
+    const i = rows.findIndex((r, idx) => setsFor(today, day.id, r[0], prs[idx].sets).slice(0, prs[idx].sets).some((s) => !s.done));
+    openEx = i >= 0 ? day.id + ':' + i : '';
+  }
   return `
-  <div class="dayhead">
-    <div><small class="wd">${day.wd}</small><h2>${day.short} · ${day.title}</h2><p>${esc(day.sub)}</p></div>
-    <div class="ring" style="--p:${(done / total) * 100}"><span>${done}/${total}</span></div>
-  </div>
-  <div class="card shoes">${SHOES[day.shoes]}</div>
-  <div class="card warmup"><b>🔥 Calentamiento (8 min)</b><p>5 min cinta a paso rápido + 10 rotaciones de hombro, 10 sentadillas sin peso, 10 aperturas con banda o brazos. El primer ejercicio incluye sus series de aproximación.</p>
-  <p class="hint">Orden: los 2 primeros ejercicios no se mueven (pesados y press con mancuernas). Del 3º en adelante, si algo está ocupado, cambia el orden o pulsa 🔄 Cambiar.</p></div>
-  ${rows.map((r, idx) => exCard(day, r, idx)).join('')}
-  <div class="card cardio">
-    <h3>${esc(cardio.title)}</h3>
-    <ul>${cardio.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-    <p class="hint">⌚ En el Watch: Entreno → Correr en interior (o Caminar en interior). Zona 2 ≈ 110-135 ppm: puedes hablar en frases.</p>
-  </div>
-  ${day.klass ? `<div class="card klass"><b>🥊 Clase recomendada</b><p>${esc(day.klass)}. Resérvala en la app de VivaGym (hasta 7 días antes, máx. 2 al día).</p></div>` : ''}
-  <div class="card"><b>🧘 Vuelta a la calma (5 min)</b><p class="hint">Estira pecho, dorsal, cuádriceps y femoral 30 s cada uno. Bebe agua.</p></div>`;
+  <nav class="days">${DAYS.map((d) => `<button class="dchip ${d.id === day.id ? 'on' : ''}" data-act="day" data-day="${d.id}">${d.wd.slice(0, 3)}${doneThisWeek(d.id) ? '<i>✓</i>' : ''}</button>`).join('')}</nav>
+
+  <header class="dh">
+    <div><span class="eyebrow">${day.wd}</span><h2>${day.title}</h2><p class="muted">${esc(day.sub)}</p></div>
+    <div class="count"><b>${done}</b>/${total}<small>series</small></div>
+  </header>
+  ${bar(done, total)}
+  <dl class="facts">
+    <div><dt>Zapatillas</dt><dd>${day.shoes === 'run' ? 'De correr (y planas para las pesas si puedes)' : 'Planas y duras (Converse / Vans)'}</dd></div>
+    <div><dt>Intensidad</dt><dd>RIR ${ph.rir}: elige un peso con el que podrías hacer ${ph.rir === '1-2' ? '1-2' : ph.rir} reps más</dd></div>
+  </dl>
+
+  <details class="block"><summary>Calentamiento · 8 min</summary>
+    <p>5 min de cinta a paso rápido, 10 rotaciones de hombro, 10 sentadillas sin peso y 10 aperturas de brazos. El primer ejercicio trae sus series de aproximación calculadas.</p>
+    <p class="muted small">Los 2 primeros ejercicios no se mueven (los pesados y los press con mancuernas). Del 3º en adelante, si algo está ocupado, cambia el orden o usa "Cambiar ejercicio".</p>
+  </details>
+
+  <ol class="exlist">${rows.map((r, idx) => exItem(day, r, idx, prs[idx])).join('')}</ol>
+
+  <details class="block"><summary>${esc(cardio.title)}</summary>
+    <ul class="plain">${cardio.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+    <p class="muted small">Watch: Entreno → Correr (o Caminar) en interior. Zona 2 ≈ 110-135 ppm: puedes hablar en frases.</p>
+  </details>
+  ${day.klass ? `<div class="block"><b>Clase recomendada</b><p class="muted">${esc(day.klass)}. Resérvala en la app de VivaGym (hasta 7 días antes, máx. 2 al día).</p></div>` : ''}
+  <div class="block"><b>Vuelta a la calma · 5 min</b><p class="muted">Estira pecho, dorsal, cuádriceps y femoral 30 s cada uno. Bebe agua.</p></div>
+  <button class="textbtn" data-act="reset-day">Reiniciar las series de hoy de este día</button>`;
 }
 
-function exCard(day, row, idx) {
-  const [slug, , rmin, rmax, rest, tags] = row;
+function exItem(day, row, idx, pr) {
+  const [slug, , rmin, rmax, rest] = row;
   const ex = EX[slug];
-  const pr = prescribe(day.id, row);
-  const today = TODAY();
-  const sets = setsFor(today, day.id, slug, pr.sets);
-  const hist = history(slug);
-  const unit = ex.inc === 'time' ? 's' : 'reps';
+  const key = day.id + ':' + idx;
+  const sets = setsFor(TODAY(), day.id, slug, pr.sets);
   const nDone = sets.slice(0, pr.sets).filter((s) => s.done).length;
   const complete = nDone >= pr.sets;
+  const open = openEx === key;
+  const unit = ex.inc === 'time' ? 's' : 'reps';
+  return `<li class="ex ${complete ? 'complete' : ''} ${open ? 'open' : ''}" id="ex-${key.replace(':', '-')}">
+    <button class="exhead" data-act="open-ex" data-key="${key}">
+      <span class="num">${complete ? '✓' : idx + 1}</span>
+      <span class="exname"><b>${esc(ex.name)}</b><small>${pr.sets} × ${rmin}-${rmax} ${unit}${pr.kg != null ? ' · ' + fmt(pr.kg) + ' kg' : ''}</small></span>
+      <span class="exstate">${nDone}/${pr.sets}</span>
+    </button>
+    ${open ? exBody(day, row, idx, pr, sets) : ''}
+  </li>`;
+}
+
+function exBody(day, row, idx, pr, sets) {
+  const [slug, , rmin, rmax, rest, tags] = row;
+  const ex = EX[slug];
+  const hist = history(slug);
+  const unit = ex.inc === 'time' ? 's' : 'reps';
   const wu = warmups(ex, pr.kg, idx === 0);
   const opts = [day.ex[idx][0], ...(day.ex[idx][6] || [])];
   const key = day.id + ':' + idx;
-  const tagCls = (t) => (t === 'Fuerza' ? 'fuerza' : t === 'Viga' ? 'viga' : t.startsWith('Extra') || t === 'Dcho primero' ? 'asim' : t === 'Antebrazo' ? 'ante' : t === 'Core' ? 'core' : '');
-  const lastTxt = hist.length ? `${hist[0].sets.map((s) => (s.kg != null ? fmt(s.kg) + '×' : '') + s.reps).join(' · ')} <em>(${parseD(hist[0].date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })})</em>` : 'Primera vez';
+  const lastTxt = hist.length ? `${hist[0].sets.map((s) => (s.kg != null ? fmt(s.kg) + '×' : '') + s.reps).join(' · ')}` : 'Primera vez';
+  const notes = [];
+  if (ex.rightFirst) notes.push('Brazo derecho primero. El izquierdo iguala las reps del derecho, nunca más.');
+  if (ex.extraRight) notes.push('Solo el lado derecho: serie extra para igualar el pectoral.');
+  if (tags.includes('Superserie') && tags.includes('Bíceps')) notes.push('Superserie: 1 serie de curl, 1 de tríceps sin descanso, descansa y repite.');
 
-  const rows = [];
+  const rowsHtml = [];
   for (let i = 0; i < pr.sets; i++) {
     const s = sets[i];
     const hint = inSessionHint(ex, row, sets, i);
     const kgPh = hint?.kg ?? pr.kg;
-    rows.push(`
+    rowsHtml.push(`
     <div class="set ${s.done ? 'done' : ''}" data-day="${day.id}" data-idx="${idx}" data-slug="${slug}" data-i="${i}">
-      <span class="sn">S${i + 1}</span>
+      <span class="sn">${i + 1}</span>
       ${ex.inc === 'time' ? '<span class="kg na">—</span>' : `<label class="kg"><input type="number" inputmode="decimal" step="0.5" data-f="kg" value="${s.kg ?? ''}" placeholder="${kgPh ?? 'kg'}"><i>kg</i></label>`}
       <label class="rp"><input type="number" inputmode="numeric" data-f="reps" value="${s.reps ?? ''}" placeholder="${pr.reps[i] ?? rmax}"><i>${unit}</i></label>
-      <button class="chk" data-act="set" aria-label="Serie hecha">${s.done ? '✔' : ''}</button>
+      <button class="chk" data-act="set" aria-label="Serie hecha">${s.done ? '✓' : ''}</button>
       ${hint && !s.done ? `<div class="sethint">${hint.text}</div>` : ''}
     </div>`);
   }
 
-  return `
-  <article class="card ex ${complete ? 'complete' : ''}">
-    <button class="exhead" data-act="toggle-ex">
-      <span class="num">${idx + 1}</span>
-      <span class="exname"><b>${esc(ex.name)}</b><small>${pr.sets} × ${rmin}-${rmax} ${unit} · RIR ${phase().rir} · descanso ${fmtTime(rest)}</small></span>
-      <span class="exstate">${nDone}/${pr.sets}</span>
-    </button>
-    <div class="exbody">
-      <div class="tags">${tags.map((t) => `<span class="chip ${tagCls(t)}">${esc(t)}</span>`).join('')}${opts.length > 1 ? `<button class="swapbtn" data-act="swap-open">🔄 Cambiar</button>` : ''}</div>
-      ${opts.length > 1 ? `<div class="swaps" hidden><small>¿Máquina ocupada o no la hay? Elige otra (cada una guarda su progreso):</small>${opts.map((o) => `<button class="${o === slug ? 'on' : ''}" data-act="swap" data-key="${key}" data-slug="${o}">${o === slug ? '✔ ' : ''}${esc(EX[o].name)}</button>`).join('')}</div>` : ''}
-      ${tags.includes('Superserie') && tags.includes('Bíceps') ? '<div class="ssnote">🔁 Superserie: 1 serie de curl → 1 de tríceps sin descanso → descansa → repite.</div>' : ''}
-      <button class="imgwrap" data-act="zoom" data-img="${IMG + ex.img}" aria-label="Ampliar imagen"><img loading="lazy" src="${IMG + ex.img}" alt="${esc(ex.name)}" onerror="this.parentNode.classList.add('noimg')"><span>Ver en grande</span></button>
-      <div class="prog ${pr.status}">
-        <div><small>Última vez</small><p>${lastTxt}</p></div>
-        <div><small>Hoy</small><p>${pr.kg != null ? `<b>${fmt(pr.kg)} kg</b> × ` : ''}${pr.reps.join(' · ')} ${unit}</p></div>
-        <p class="msg">${esc(pr.msg)}</p>
-      </div>
-      ${wu.length ? `<div class="wu"><small>Aproximación (no se apuntan)</small><div>${wu.map((w) => `<span>${fmt(w.kg)} kg × ${w.reps}</span>`).join('')}</div></div>` : ''}
-      ${ex.rightFirst ? '<div class="asimnote">👉 Brazo DERECHO primero. El izquierdo iguala las reps del derecho, nunca más.</div>' : ''}
-      ${ex.extraRight ? '<div class="asimnote">👉 Solo lado DERECHO: serie extra para igualar el pectoral.</div>' : ''}
-      <div class="sets">${rows.join('')}</div>
-      <p class="note">${esc(ex.note)}</p>
-      <a class="guide" href="${GUIDE + slug}" target="_blank" rel="noopener">Ver guía completa en Simply Fitness ↗</a>
+  return `<div class="exbody">
+    <button class="imgwrap" data-act="zoom" data-img="${IMG + ex.img}" aria-label="Ampliar imagen"><img src="${IMG + ex.img}" alt="${esc(ex.name)}" onerror="this.parentNode.classList.add('noimg')"></button>
+    <div class="prog ${pr.status}">
+      <div><small>Última vez</small><p>${lastTxt}</p></div>
+      <div><small>Hoy</small><p><b>${pr.kg != null ? fmt(pr.kg) + ' kg × ' : ''}${pr.reps.join(' · ')}</b></p></div>
+      <p class="msg">${esc(pr.msg)}</p>
     </div>
-  </article>`;
+    ${notes.map((n) => `<p class="note-strong">${n}</p>`).join('')}
+    ${wu.length ? `<div class="wu"><small>Aproximación (no se apuntan)</small><div>${wu.map((w) => `<span>${fmt(w.kg)} kg × ${w.reps}</span>`).join('')}</div></div>` : ''}
+    <div class="sets"><div class="sethead"><span></span><span>Peso</span><span>Reps</span><span></span></div>${rowsHtml.join('')}</div>
+    <p class="muted small">Descanso entre series: ${fmtTime(rest)}. Al marcar una serie arranca el temporizador.</p>
+    <p class="tech">${esc(ex.note)}</p>
+    <div class="exlinks">
+      ${opts.length > 1 ? `<button class="textbtn" data-act="swap-open">Cambiar ejercicio</button>` : '<span></span>'}
+      <a href="${GUIDE + slug}" target="_blank" rel="noopener">Guía completa ↗</a>
+    </div>
+    ${opts.length > 1 ? `<div class="swaps" hidden><small>¿Máquina ocupada o no la hay? Cada opción guarda su progreso:</small>${opts.map((o) => `<button class="${o === slug ? 'on' : ''}" data-act="swap" data-key="${key}" data-slug="${o}">${esc(EX[o].name)}${o === slug ? ' ✓' : ''}</button>`).join('')}</div>` : ''}
+  </div>`;
 }
 
+// ---------- Comida ----------
 let curMeal = null; // pestaña de comida elegida (si no, la que toca por la hora)
 const mealNow = () => curMeal || mealByHour();
 
@@ -596,7 +639,7 @@ function foodItemsHtml(items) {
     return `<li>
       <span>${esc(x.name)}${ulabel}</span>
       ${x.per ? `<label class="fg"><input type="number" inputmode="decimal" data-food-g="${x.id}" value="${x.g}"><i>g</i></label>` : '<span></span>'}
-      <span>${x.kcal} kcal · ${fmt(x.p, 0)} P</span>
+      <span>${x.kcal} kcal</span>
       <button data-act="food-del" data-id="${x.id}" aria-label="Borrar">✕</button>
     </li>`;
   }).join('')}</ul>`;
@@ -626,262 +669,141 @@ function viewComida() {
   const left = kt.target - ft.kcal;
   const pLeft = PROTEIN_G - ft.p;
   const kcalOf = (m) => list.filter((x) => x.meal === m).reduce((a, x) => a + x.kcal, 0);
-  const inMeal = list.filter((x) => x.meal === meal);
-  const others = inMeal.filter((x) => !MENU[meal].some(([, names]) => names.includes(x.name)));
+  const others = list.filter((x) => x.meal === meal && !MENU[meal].some(([, names]) => names.includes(x.name)));
   const summary = MEALS.map((m) => {
     const items = list.filter((x) => x.meal === m);
     if (!items.length) return '';
-    return `<li><b>${MEAL_NAME[m]}</b> <em>${kcalOf(m)} kcal</em><p>${items.map((x) => x.name + (x.u && x.g ? ` ×${fmt(x.g / x.u[1], 1)}` : '')).join(' · ')}</p></li>`;
+    return `<li><div class="row"><b>${MEAL_NAME[m]}</b><span>${kcalOf(m)} kcal</span></div><p>${items.map((x) => x.name + (x.u && x.g ? ` ×${fmt(x.g / x.u[1], 1)}` : '')).join(' · ')}</p></li>`;
   }).join('');
 
   return `
-  <div class="card">
-    <div class="big">${fmt(ft.kcal, 0)} <small>/ ${fmt(kt.target, 0)} kcal</small></div>
+  <section class="panel">
+    <div class="kpis">
+      <div><b>${fmt(ft.kcal, 0)}</b><span>de ${fmt(kt.target, 0)} kcal</span></div>
+      <div><b>${fmt(ft.p, 0)} g</b><span>de ${PROTEIN_G} g de proteína</span></div>
+    </div>
     ${bar(ft.kcal, kt.target, ft.kcal > kt.target ? 'over' : '')}
-    <p class="hint">${left >= 0 ? `Te quedan <b>${fmt(left, 0)} kcal</b>` : `Te has pasado <b>${fmt(-left, 0)} kcal</b>: mañana sin cambios, un día no arruina nada.`}${kt.provisional ? ' · objetivo provisional hasta meter las calorías del Watch' : ''}</p>
-    <div class="macros"><span>Proteína <b>${fmt(ft.p, 0)}/${PROTEIN_G} g</b></span><span>Hidratos <b>${fmt(ft.c, 0)} g</b></span><span>Grasa <b>${fmt(ft.f, 0)}/${FAT_G} g</b></span></div>
-    ${bar(ft.p, PROTEIN_G, 'prot')}
-    <p class="hint ${pLeft <= 0 ? 'ok' : ''}">${pLeft > 0 ? `Te faltan <b>${fmt(pLeft, 0)} g de proteína</b>${pLeft > 40 ? ' → 2º batido o tu kit (huevo cocido, lata de atún).' : '.'}` : '✔ Proteína del día cubierta.'}</p>
-  </div>
+    ${bar(ft.p, PROTEIN_G)}
+    <p class="muted small">${left >= 0 ? `Te quedan ${fmt(left, 0)} kcal.` : `Te has pasado ${fmt(-left, 0)} kcal; mañana sin cambios.`} ${pLeft > 0 ? `Te faltan ${fmt(pLeft, 0)} g de proteína${pLeft > 40 ? ': 2º batido o tu kit (huevo cocido, lata de atún).' : '.'}` : 'Proteína del día cubierta.'}</p>
+  </section>
 
-  <div class="mealtabs">${MEALS.map((m) => `<button class="mtab ${m === meal ? 'on' : ''}" data-act="meal" data-meal="${m}">${MEAL_NAME[m]}<small>${kcalOf(m) ? kcalOf(m) + ' kcal' : '—'}</small></button>`).join('')}</div>
+  <nav class="seg">${MEALS.map((m) => `<button class="${m === meal ? 'on' : ''}" data-act="meal" data-meal="${m}">${MEAL_NAME[m].replace(' (trabajo)', '').replace(' post-gym', '').replace(' y bebidas', '')}</button>`).join('')}</nav>
 
-  <div class="card">
-    <div class="row"><h3>${MEAL_NAME[meal]}</h3><b>${kcalOf(meal)} kcal</b></div>
-    <p class="hint">Toca <b>+</b> por cada unidad que comiste: 2 huevos = + +. Las cantidades son de comida ya hecha.</p>
+  <section class="panel">
+    <div class="row"><h3>${MEAL_NAME[meal]}</h3><span class="muted">${kcalOf(meal)} kcal</span></div>
+    <p class="muted small">Pulsa + por cada unidad que comiste (2 huevos = + +). Cantidades de comida ya hecha.</p>
     ${MENU[meal].map(([h, names]) => `<h4>${esc(h)}</h4><div class="menu">${names.map((n) => menuRow(n, meal, list)).join('')}</div>`).join('')}
-    ${others.length ? `<h4>Otros que añadiste</h4>${foodItemsHtml(others)}` : ''}
-  </div>
+    ${others.length ? `<h4>Otros añadidos</h4>${foodItemsHtml(others)}` : ''}
+  </section>
 
-  <div class="card">
-    <h3>🔎 ¿No está en el menú?</h3>
-    <label class="field"><span>Buscar (se añade a ${MEAL_NAME[meal].toLowerCase()})</span><input id="f-q" type="search" placeholder="sardinas, pera, cerveza…" autocomplete="off"></label>
+  <section class="panel">
+    <h3>¿No está en la lista?</h3>
+    <label class="field"><span>Buscar (se añade a ${MEAL_NAME[meal].toLowerCase()})</span><input id="f-q" type="search" placeholder="Sardinas, pera, cerveza…" autocomplete="off"></label>
     <div id="f-res" class="results"></div>
-    <details class="manual"><summary>Comida fuera de casa / a ojo (kcal manual)</summary>
+    <details class="more"><summary>Comida fuera de casa (calorías a ojo)</summary>
       <div class="grid2">
         <label class="field"><span>Qué era</span><input id="m-name" placeholder="Menú del día"></label>
-        <label class="field"><span>kcal aprox.</span><input id="m-kcal" type="number" inputmode="numeric" placeholder="800"></label>
-        <label class="field"><span>Proteína (g, opcional)</span><input id="m-p" type="number" inputmode="numeric" placeholder="40"></label>
+        <label class="field"><span>Kcal aprox.</span><input id="m-kcal" type="number" inputmode="numeric" placeholder="800"></label>
+        <label class="field"><span>Proteína (g)</span><input id="m-p" type="number" inputmode="numeric" placeholder="40"></label>
         <button class="btn" data-act="manual-add">Añadir</button>
       </div>
-      <p class="hint">Referencias: menú del día 900-1.200 · hamburguesa con patatas 1.100 · pizza mediana 1.000-1.300 · bocadillo de jamón 450 · kebab 800.</p>
+      <p class="muted small">Referencias: menú del día 900-1.200 · hamburguesa con patatas 1.100 · pizza mediana 1.000-1.300 · bocadillo de jamón 450 · kebab 800.</p>
     </details>
-  </div>
+  </section>
 
-  ${summary ? `<div class="card"><h3>📋 Resumen de hoy</h3><ul class="daysum">${summary}</ul></div>` : ''}
-
-  ${nutritionGuide()}`;
+  ${summary ? `<section class="panel"><h3>Resumen de hoy</h3><ul class="daysum">${summary}</ul></section>` : ''}`;
 }
 
-function nutritionGuide() {
-  return `
-  <h2 class="sec">🕐 Tu día tipo</h2>
-  <div class="card">
-    <ul class="sched">${SCHEDULE.map(([h, t, d]) => `<li><time>${h}</time><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>
-    <p class="hint">Días sin gym: mismo horario, y la creatina (con o sin batido) va con el almuerzo.</p>
-  </div>
-
-  <div class="card">
-    <h3>🥤 Proteína en polvo y creatina</h3>
-    <ul class="tips">
-      <li><b>Cacito</b> = el medidor de plástico que viene dentro del bote. Suele ser ≈30 g de polvo ≈ 24 g de proteína (mira la etiqueta de tu bote).</li>
-      <li><b>Al llegar del gym:</b> 1 cacito + 5 g de creatina, todo junto en 300 ml de agua. Agitas y listo.</li>
-      <li><b>2º batido solo si hace falta:</b> si a las 18:00 la app dice que te faltan más de 40 g de proteína. Si el almuerzo fue fuerte, no.</li>
-      <li><b>Creatina 5 g todos los días</b>, también los de descanso. Sin fase de carga. Lo que importa es no saltártela, no la hora.</li>
-      <li>Si tu proteína es <b>whey concentrada</b> lleva algo de lactosa. Si te da gases, cámbiala por <b>whey isolate</b> o vegetal.</li>
-      <li>Con creatina, 3 L de agua al día. Los primeros días puedes subir 1-1,5 kg: es agua dentro del músculo, no grasa. Fíate de la cintura.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h3>🏠 Piso compartido: tu kit de proteína</h3>
-    <p class="hint">Comes lo que toque y completas con cosas tuyas, sin cocinar aparte ni quitarle nada a nadie.</p>
-    <ul class="tips">
-      <li><b>Huevos cocidos en tanda:</b> el domingo cueces 6-8 y aguantan 4-5 días en la nevera. 1-2 al lado del plato = +12-25 g de proteína.</li>
-      <li><b>Una lata de atún o sardinas</b> encima del arroz: +15-25 g en 10 segundos.</li>
-      <li><b>Pechuga de pavo en lonchas</b> o <b>claras de huevo de botella</b> (en tortilla rápida).</li>
-      <li>¿Ración pequeña de carne? Sírvete <b>menos arroz o patata</b> y suma tu kit. La proteína es lo que manda.</li>
-      <li>Si un día no llegas, para eso está el 2º batido. Sin dramas.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h3>🛒 Lista de compra (Mercadona, económico)</h3>
-    <table class="rules">
-      <tr><td>Proteína</td><td>Huevos (docena) · atún al natural (pack de latas) · sardinas y caballa en lata · mejillones en escabeche · claras de huevo en botella · pechuga de pavo en lonchas · pechuga de pollo en bandeja · garbanzos y lentejas cocidos en bote</td></tr>
-      <tr><td>Fruta</td><td>Plátanos · mandarinas · manzanas · kiwis (la más barata de temporada)</td></tr>
-      <tr><td>Desayuno</td><td>Pan de molde integral · copos de avena · leche sin lactosa o bebida de soja (tiene proteína)</td></tr>
-      <tr><td>Picoteo bueno</td><td>Cacahuetes tostados · crema de cacahuete 100 % · tortitas de maíz · chocolate negro 85 %</td></tr>
-    </table>
-    <p class="hint">Lo que más te va a ayudar: huevos, latas de atún/sardinas y plátanos. Baratos, duran y no hay que cocinar.</p>
-  </div>
-
-  <div class="card">
-    <h3>🍽️ Cuando te sirvas tú</h3>
-    <ul class="tips">
-      <li><b>Arroz: 1 taza</b> (un puño cerrado y poco más). Si hay legumbre, media taza basta.</li>
-      <li><b>Patata frita O plátano macho, no los dos.</b></li>
-      <li><b>Garbanzos/lentejas con salchicha:</b> coge 1 salchicha y añade un huevo cocido de tu kit.</li>
-      <li><b>Pasta con panceta:</b> plato normal (no doble) + una lata de atún.</li>
-      <li><b>Ensalada o tomate</b> cuando haya: llena sin sumar casi nada.</li>
-      <li>Primero la proteína, luego el resto. Si te llenas, que sobre arroz, no carne.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h3>🏪 La máquina del trabajo</h3>
-    <table class="rules">
-      <tr><td>✅ Mejor</td><td><b>Barrita de proteínas</b> · <b>frutos secos o cacahuetes</b></td></tr>
-      <tr><td>🟡 Si no hay otra</td><td>Barrita de cereales · bolsa pequeña de patatas</td></tr>
-      <tr><td>❌ Evita</td><td>Bollería, chocolatinas, galletas y refrescos normales: 220-300 kcal de azúcar sin proteína, y a la hora tienes más hambre</td></tr>
-    </table>
-    <p class="hint">Lo ideal es no necesitarla: un plátano o una mandarina en la mochila. Ojo: muchas chocolatinas y barritas llevan leche (lactosa).</p>
-  </div>
-
-  <div class="card">
-    <h3>📏 Cómo medir sin volverte loco</h3>
-    <ul class="tips">
-      <li>Todo está en <b>unidades de casa</b>: huevos, rebanadas, tazas, cazos, latas, muslos. No hace falta báscula.</li>
-      <li>Taza de arroz = una taza de desayuno normal llena. Cazo = el cucharón de servir.</li>
-      <li>Mejor aproximado que no apuntar: con que se parezca, la báscula semanal dirá si vamos bien.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h3>🎯 Cintura e hidratación</h3>
-    <ul class="tips">
-      <li><b>Agua:</b> 3 L al día (+0,5 L los días de gym). Un vaso grande al levantarte.</li>
-      <li><b>Pasos:</b> 8.000-10.000 al día con el Watch. Es lo que más grasa abdominal quema fuera del gym.</li>
-      <li><b>Sueño:</b> 7-8 h. Dormir poco sube el cortisol y la grasa se acumula en la barriga.</li>
-      <li><b>Sal y ultraprocesados:</b> reducirlos deshincha la cintura en días.</li>
-      <li><b>Lactosa oculta:</b> embutidos, salchichas, pan de molde, salsas y bollería. Lee las etiquetas. La leche "sin lactosa" sí puedes tomarla.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h3>🍺 Tus reglas de alcohol</h3>
-    <p class="hint">1 consumición = 1 caña = 1 copa de vino = 1 chupito (llevan casi el mismo alcohol).</p>
-    <table class="rules">
-      <tr><td>Partido / día normal</td><td><b>0,0 o nada</b> · máx. 1</td></tr>
-      <tr><td>Llega visita</td><td><b>Máx. 2</b></td></tr>
-      <tr><td>Cumpleaños / evento</td><td><b>Máx. 3</b>, luego agua o 0,0</td></tr>
-      <tr><td>Límite semanal</td><td><b>4</b> · nunca 2 días seguidos ni justo después de entrenar</td></tr>
-    </table>
-    <h4>Para tener algo en la mano</h4>
-    <p>Cerveza 0,0 / tostada 0,0 (≈20 kcal) · tónica zero con limón en vaso de tubo (parece un gin-tonic) · agua con gas, limón y hielo · vermut o vino sin alcohol · kombucha · refresco zero.</p>
-    <h4>¿Chupito de aguardiente o cerveza?</h4>
-    <p>En alcohol, 1 chupito ≈ 1 caña. En calorías el chupito (≈100) gana al tercio (≈140) o a la pinta (≈220), pero se bebe en 2 segundos y caen en cadena. Lo mejor: destilado con refresco zero, bebido despacio.</p>
-    <h4>Si bebes</h4>
-    <p>Mantén la proteína, quita el hidrato de la cena, un vaso de agua entre copa y copa, y nada de picoteo. Evita cremas tipo Baileys: llevan lactosa.</p>
-  </div>`;
+// ---------- Ajustes y guías ----------
+function guide(title, body) {
+  return `<details class="gitem"><summary>${title}</summary><div>${body}</div></details>`;
 }
-
-function viewMetodo() {
+function guidesHtml() {
   const lifts = ['barbell-bench-press', 'squat', 'barbell-row', 'barbell-deadlift', 'smith-machine-shoulder-press', 'incline-dumbbell-bench-press'];
   const e1rm = (kg, r) => kg * (1 + r / 30);
   const rowsL = lifts.map((slug) => {
     const h = history(slug, '9999-12-31');
     if (!h.length) return `<tr><td>${esc(EX[slug].name)}</td><td colspan="3" class="muted">Sin datos</td></tr>`;
     const best = (s) => Math.max(...s.sets.map((x) => e1rm(x.kg ?? 0, x.reps)));
-    const first = h[h.length - 1], last = h[0];
-    const b0 = best(first), b1 = best(last);
-    return `<tr><td>${esc(EX[slug].name)}</td><td>${fmt(b0, 0)}</td><td>${fmt(b1, 0)}</td><td class="${b1 >= b0 ? 'up' : 'down'}">${b1 >= b0 ? '+' : ''}${fmt(((b1 - b0) / b0) * 100 || 0, 0)} %</td></tr>`;
+    const b0 = best(h[h.length - 1]), b1 = best(h[0]);
+    return `<tr><td>${esc(EX[slug].name)}</td><td>${fmt(b0, 0)}</td><td>${fmt(b1, 0)}</td><td class="${b1 >= b0 ? 'ok' : 'bad'}">${b1 >= b0 ? '+' : ''}${fmt(((b1 - b0) / b0) * 100 || 0, 0)} %</td></tr>`;
   }).join('');
-  return `
-  <div class="card">
-    <h3>📈 Tu fuerza (1RM estimado, kg)</h3>
-    <table class="rules"><tr><th>Ejercicio</th><th>Inicio</th><th>Ahora</th><th></th></tr>${rowsL}</table>
-    <p class="hint">Estimado con la mejor serie de cada sesión (fórmula de Epley). Así ves que ganas aunque cambien las reps.</p>
-  </div>
 
-  <div class="card">
-    <h3>🧠 Cómo progresas: doble progresión</h3>
-    <ol class="tips">
-      <li>Cada ejercicio tiene un rango, ej. <b>3 × 8-10</b>.</li>
-      <li>Todas las series con <b>el mismo peso</b> (series rectas). El peso más alto ya es la primera serie efectiva, porque antes haces la aproximación.</li>
-      <li>Es normal que las reps bajen un poco serie a serie: 10 · 9 · 8. No bajes el peso por eso.</li>
-      <li>Cada sesión intenta <b>+1 rep</b> en alguna serie con el mismo peso.</li>
-      <li>Cuando hagas <b>todas las series al máximo del rango</b> → la app sube peso (+2,5 kg barra/máquina, +2 kg mancuerna) y vuelves al mínimo de reps.</li>
-      <li>Si en una serie te sobran 2+ reps, la app te dice que subas en la siguiente. Si te quedas 2 reps corto, que bajes.</li>
-      <li>Dos sesiones seguidas sin llegar al mínimo → −10 % y reconstruyes.</li>
-      <li>Cada 6 semanas, <b>descarga</b>: −10 % y una serie menos. Así encadenas meses subiendo sin estancarte ni lesionarte.</li>
-    </ol>
-  </div>
-
-  <div class="card">
-    <h3>🏋️ Calentamiento de los básicos</h3>
-    <p>Solo en el <b>primer ejercicio</b> del día: barra vacía × 10 → 50 % × 6 → 70 % × 4 → 85 % × 2 → series de trabajo. En los demás ejercicios grandes, 1 serie al 60 % × 8. En máquinas pequeñas y aislamientos, ninguna: ya estás caliente.</p>
-  </div>
-
-  <div class="card">
-    <h3>🎯 RIR (reps en reserva)</h3>
-    <p>Las reps que te quedan en el depósito al acabar la serie. No se trata de hacer menos reps de las que pide la app, sino de <b>elegir un peso más ligero</b>: si la app pide 10 y estás en RIR 3, usa un peso con el que podrías hacer 13, haz 10 y para. La última rep sale limpia y rápida, sin sufrir.</p>
-    <p class="hint">Si te sobran muchas más, la app te dice que subas en la siguiente serie. En 1-2 sesiones das con tu peso.</p>
-    <ul class="tips"><li>Semanas 1-2: RIR 3 (readaptación)</li><li>Semanas 3-5: RIR 2</li><li>Semana 6: descarga</li><li>Semana 7+: RIR 1-2 (básicos siempre 2)</li></ul>
-  </div>
-
-  <div class="card">
-    <h3>📆 Tu semana</h3>
-    <table class="rules">
-      ${DAYS.map((d) => `<tr><td>${d.wd}</td><td><b>${d.short} · ${d.title}</b><br><small>${d.cardio === 'intervalos' ? '🏃 Correr 25 min' : '🚶 10 min suaves' + (d.klass ? ' + clase: ' + esc(d.klass) : '')}</small></td></tr>`).join('')}
-      <tr><td>Miércoles</td><td>Descanso activo: caminata 30-45 min o clase de Movilidad/Stretching · gripper</td></tr>
-      <tr><td>Domingo</td><td>Descanso total · gripper</td></tr>
-    </table>
-    <ul class="tips">
-      <li>Cada músculo se entrena 2 veces por semana; el hombro lateral (viga) 3.</li>
-      <li>Si un día no puedes ir, no pasa nada: la pestaña <b>Hoy</b> sigue el orden D1→D5 y te dice cuál toca.</li>
-      <li><b>Seguridad:</b> los press con mancuernas por encima de la cara van siempre de primeros. A mitad de sesión, máquina o multipower.</li>
-      <li>Sesión: 8-10 min de calentamiento, 65-75 min de pesas, 25 min de cinta (o 10 suaves + clase), 5 min de estiramientos.</li>
-      <li><b>Si 2 semanas seguidas baja la fuerza, duermes mal o duelen las articulaciones:</b> vuelve a 4 días (quita el D5) hasta recuperarte.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h3>🥊 Clases de VivaGym</h3>
-    <ul class="tips">
-      <li><b>Sí:</b> Boxeo y Abdominales/Xpress tras pierna (martes y sábado); Movilidad, Stretching o Pilates el miércoles.</li>
-      <li><b>No por ahora:</b> HIT, V-Cross, V-Power, V-Hybrid (fuerza intensa encima de tus 5 días, en déficit te frena) ni Cycling tras pierna.</li>
-      <li>Nunca en lugar de las pesas.</li>
-    </ul>
-  </div>`;
+  return [
+    guide('Tu fuerza', `<table class="tbl"><tr><th>Ejercicio</th><th>Inicio</th><th>Ahora</th><th></th></tr>${rowsL}</table><p class="muted small">1RM estimado (kg) con la mejor serie de cada sesión.</p>`),
+    guide('Tu semana y las clases', `<table class="tbl">${DAYS.map((d) => `<tr><td>${d.wd}</td><td><b>${d.title}</b><br><span class="muted">${d.cardio === 'intervalos' ? 'Correr 25 min' : '10 min suaves' + (d.klass ? ' + ' + esc(d.klass) : '')}</span></td></tr>`).join('')}
+      <tr><td>Miércoles</td><td>Caminata o Movilidad / Stretching · gripper</td></tr><tr><td>Domingo</td><td>Descanso total · gripper</td></tr></table>
+      <ul class="plain"><li>Cada músculo 2 veces por semana; el hombro lateral 3.</li><li>Si faltas un día, sigue el orden: la pantalla Hoy te dice cuál toca.</li><li>Press con mancuernas por encima de la cara: siempre de primeros.</li><li>Clases sí: Boxeo, Abdominales/Xpress, Movilidad, Stretching, Pilates. No por ahora: HIT, V-Cross, V-Power, V-Hybrid, Cycling tras pierna.</li><li>Si 2 semanas seguidas baja la fuerza, duermes mal o duelen las articulaciones: quita el sábado hasta recuperarte.</li></ul>`),
+    guide('Cómo progresas', `<ol class="plain"><li>Cada ejercicio tiene un rango, por ejemplo 3 × 8-10.</li><li>Todas las series con el mismo peso. Es normal que las reps bajen un poco: 10 · 9 · 8.</li><li>Cada sesión intenta +1 rep con el mismo peso.</li><li>Cuando completas todas las series al máximo del rango, la app sube el peso (+2,5 kg barra o máquina, +2 kg mancuerna) y vuelves al mínimo de reps.</li><li>Si en una serie te sobran 2 o más reps, la app te dice que subas en la siguiente; si te quedas corto, que bajes.</li><li>Dos sesiones seguidas sin llegar al mínimo: −10 % y reconstruyes.</li><li>Cada 6 semanas, descarga: −10 % y una serie menos.</li></ol>`),
+    guide('RIR (reps en reserva)', `<p>Las reps que te quedan en el depósito al acabar la serie. No es hacer menos reps de las que pide la app, sino elegir el peso: si pide 10 y estás en RIR 3, usa un peso con el que podrías hacer 13, haz 10 y para.</p><ul class="plain"><li>Semanas 1-2: RIR 3</li><li>Semanas 3-5: RIR 2</li><li>Semana 6: descarga</li><li>Semana 7 en adelante: RIR 1-2 (básicos siempre 2)</li></ul>`),
+    guide('Calentamiento', `<p>Solo en el primer ejercicio del día: barra vacía × 10 → 50 % × 6 → 70 % × 4 → 85 % × 2. En los demás ejercicios grandes, 1 serie al 60 % × 8. En máquinas pequeñas y aislamientos, ninguna.</p>`),
+    guide('Horario del día', scheduleHtml() + '<p class="muted small">Días sin gym: mismo horario; la creatina va con el almuerzo.</p>'),
+    guide('Proteína en polvo y creatina', `<ul class="plain"><li><b>Cacito</b>: el medidor que viene en el bote (≈30 g de polvo ≈ 24 g de proteína).</li><li>Al llegar del gym: 1 cacito + 5 g de creatina en 300 ml de agua.</li><li>2º batido solo si a las 18:00 te faltan más de 40 g de proteína.</li><li>Creatina 5 g todos los días, también los de descanso.</li><li>Whey concentrada lleva algo de lactosa: si te sienta mal, isolate o vegetal.</li><li>Los primeros días con creatina puedes subir 1-1,5 kg de agua: fíate de la cintura.</li></ul>`),
+    guide('Piso compartido: tu kit', `<ul class="plain"><li>Huevos cocidos en tanda el domingo (aguantan 4-5 días): 1-2 al lado del plato.</li><li>Una lata de atún o sardinas encima del arroz.</li><li>Pechuga de pavo en lonchas o claras de huevo de botella.</li><li>Si la ración de carne es pequeña, menos arroz o patata y suma tu kit.</li></ul>`),
+    guide('Cuando te sirvas tú', `<ul class="plain"><li>Arroz: 1 taza (media si hay legumbre).</li><li>Patata frita o plátano macho, no los dos.</li><li>Legumbre con salchicha: 1 salchicha + 1 huevo cocido.</li><li>Pasta con panceta: plato normal + una lata de atún.</li><li>Primero la proteína; si te llenas, que sobre arroz.</li></ul>`),
+    guide('Lista de compra (Mercadona)', `<table class="tbl"><tr><td>Proteína</td><td>Huevos, atún al natural, sardinas y caballa en lata, mejillones, claras en botella, pavo en lonchas, pechuga de pollo, garbanzos y lentejas en bote</td></tr><tr><td>Fruta</td><td>Plátanos, mandarinas, manzanas, kiwis</td></tr><tr><td>Desayuno</td><td>Pan de molde integral, avena, leche sin lactosa o bebida de soja</td></tr><tr><td>Picoteo</td><td>Cacahuetes tostados, crema de cacahuete 100 %, tortitas de maíz, chocolate 85 %</td></tr></table>`),
+    guide('Máquina del trabajo', `<ul class="plain"><li><b>Mejor:</b> barrita de proteínas o frutos secos.</li><li><b>Si no hay otra:</b> barrita de cereales o bolsa pequeña de patatas.</li><li><b>Evita:</b> bollería, chocolatinas, galletas y refrescos normales.</li><li>Lo ideal: una fruta en la mochila.</li></ul>`),
+    guide('Cintura, agua y sueño', `<ul class="plain"><li>Agua: 3 L al día (+0,5 L los días de gym).</li><li>Pasos: 8.000-10.000 al día.</li><li>Sueño: 7-8 h.</li><li>Menos sal y ultraprocesados.</li><li>Lactosa oculta: embutidos, salchichas, pan de molde, salsas y bollería. La leche sin lactosa sí.</li></ul>`),
+    guide('Reglas de alcohol', `<table class="tbl"><tr><td>Partido / día normal</td><td>0,0 o nada · máx. 1</td></tr><tr><td>Llega visita</td><td>Máx. 2</td></tr><tr><td>Cumpleaños / evento</td><td>Máx. 3, luego agua o 0,0</td></tr><tr><td>Semana</td><td>Máx. 4 · nunca 2 días seguidos ni justo después de entrenar</td></tr></table>
+      <p>Para tener algo en la mano: cerveza 0,0, tónica zero con limón, agua con gas y limón, vermut o vino sin alcohol, refresco zero.</p><p>1 chupito ≈ 1 caña de alcohol; el chupito tiene menos calorías que un tercio, pero se bebe rápido y caen en cadena. Si bebes: mantén la proteína, quita el hidrato de la cena y agua entre copas.</p>`),
+  ].join('');
 }
 
 function viewAjustes() {
   const pending = Object.keys(S.queue).length;
   return `
-  <div class="card">
-    <h3>☁️ Google Sheets</h3>
-    <p class="hint">Todo lo que apuntas se guarda en tu móvil y se copia a tu hoja de Google. Si cambias de móvil, "Recuperar" lo trae todo.</p>
-    <label class="field"><span>URL de la Web App (Apps Script)</span><input id="c-url" value="${esc(S.cfg.url)}" placeholder="https://script.google.com/macros/s/…/exec" autocapitalize="off" autocorrect="off"></label>
-    <label class="field"><span>Clave secreta</span><input id="c-token" type="password" value="${esc(S.cfg.token)}" placeholder="La que pusiste en el script" autocapitalize="off" autocorrect="off"></label>
+  <section class="panel">
+    <h3>Imagen de meta</h3>
+    ${S.goalImg ? `<img class="goal-thumb" src="${S.goalImg}" alt="">` : '<p class="muted small">Aún no has puesto ninguna.</p>'}
+    <div class="btns"><label class="btn ghost">${S.goalImg ? 'Cambiar imagen' : 'Elegir imagen'}<input type="file" accept="image/*" id="goalimg" hidden></label>${S.goalImg ? '<button class="btn ghost" data-act="goal-del">Quitar</button>' : ''}</div>
+  </section>
+
+  <section class="panel">
+    <h3>Google Sheets</h3>
+    <p class="muted small">Todo se guarda en el móvil y se copia a tu hoja. Si cambias de móvil, "Recuperar" lo trae todo.</p>
+    <label class="field"><span>URL de la Web App</span><input id="c-url" value="${esc(S.cfg.url)}" placeholder="https://script.google.com/macros/s/…/exec" autocapitalize="off" autocorrect="off"></label>
+    <label class="field"><span>Clave</span><input id="c-token" type="password" value="${esc(S.cfg.token)}" autocapitalize="off" autocorrect="off"></label>
     <div class="btns">
       <button class="btn" data-act="cfg-save">Guardar y probar</button>
       <button class="btn ghost" data-act="sync-now">Sincronizar (${pending})</button>
-      <button class="btn ghost" data-act="restore">Recuperar desde Sheets</button>
-      <button class="btn ghost" data-act="push-all">Subir todo de nuevo</button>
+      <button class="btn ghost" data-act="restore">Recuperar</button>
+      <button class="btn ghost" data-act="push-all">Subir todo</button>
     </div>
-    <p id="c-msg" class="hint">${S.lastSync ? 'Última sincronización: ' + new Date(S.lastSync).toLocaleString('es-ES') : ''}</p>
-  </div>
+    <p id="c-msg" class="muted small">${S.lastSync ? 'Última sincronización: ' + new Date(S.lastSync).toLocaleString('es-ES') : ''}</p>
+  </section>
 
-  <div class="card">
-    <h3>📅 Inicio del plan</h3>
-    <label class="field"><span>Fecha de la semana 1</span><input id="c-start" type="date" value="${S.start || TODAY()}"></label>
-    <button class="btn ghost" data-act="start-save">Guardar fecha</button>
-    <p class="hint">Se fija sola el primer día que marques una serie. Controla RIR y semanas de descarga.</p>
-  </div>
+  <section class="panel">
+    <h3>Plan</h3>
+    <label class="field"><span>Fecha de inicio (semana 1)</span><input id="c-start" type="date" value="${S.start || TODAY()}"></label>
+    <div class="btns"><button class="btn ghost" data-act="start-save">Guardar fecha</button></div>
+    <p class="muted small">Calorías: ${BASE_KCAL} + la mitad de las activas del Watch. Ajuste actual: ${S.kcalAdjust > 0 ? '+' : ''}${S.kcalAdjust} kcal.</p>
+    <div class="btns"><button class="btn ghost" data-act="adjust" data-delta="-50">−50 kcal</button><button class="btn ghost" data-act="adjust" data-delta="50">+50 kcal</button><button class="btn ghost" data-act="adjust-reset">Sin ajuste</button></div>
+  </section>
 
-  <div class="card">
-    <h3>🔥 Calorías</h3>
-    <p>Base ${BASE_KCAL} kcal + mitad de las calorías activas del Watch. Ajuste actual: <b>${S.kcalAdjust > 0 ? '+' : ''}${S.kcalAdjust} kcal</b>.</p>
-    <div class="btns"><button class="btn ghost" data-act="adjust" data-delta="-50">−50</button><button class="btn ghost" data-act="adjust" data-delta="50">+50</button><button class="btn ghost" data-act="adjust-reset">Reiniciar ajuste</button></div>
-  </div>
-
-  <div class="card">
-    <h3>💾 Copia local</h3>
+  <section class="panel">
+    <h3>Copia de seguridad</h3>
     <div class="btns"><button class="btn ghost" data-act="export">Exportar archivo</button><label class="btn ghost">Importar archivo<input id="imp" type="file" accept="application/json" hidden></label></div>
-  </div>
+  </section>
 
-  <p class="credit">Ilustraciones y guías de ejercicios: <a href="https://www.simplyfitness.com/es/pages/workout-exercise-guides" target="_blank" rel="noopener">Simply Fitness</a>.</p>`;
+  <h3 class="sec">Guías</h3>
+  <section class="guides">${guidesHtml()}</section>
+
+  <p class="credit">Ilustraciones de ejercicios: <a href="https://www.simplyfitness.com/es/pages/workout-exercise-guides" target="_blank" rel="noopener">Simply Fitness</a></p>`;
+}
+
+function loadGoalImage(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 1000 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    S.goalImg = c.toDataURL('image/jpeg', 0.82);
+    URL.revokeObjectURL(url);
+    save(); render(); toast('Imagen guardada');
+  };
+  img.src = url;
 }
 
 // ---------- Búsqueda de alimentos ----------
@@ -926,6 +848,14 @@ document.addEventListener('click', async (e) => {
   const t = e.target.closest('[data-tab],[data-act]');
   if (!t) return;
   if (t.dataset.tab) { S.tab = t.dataset.tab; save(); render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.act === 'go-day' || t.dataset.act === 'day') {
+    selDay = t.dataset.day; openEx = null; S.tab = 'entreno'; save(); render(); window.scrollTo(0, 0); return;
+  }
+  if (t.dataset.act === 'open-ex') {
+    openEx = openEx === t.dataset.key ? '' : t.dataset.key;
+    render(); scrollToEx(); return;
+  }
+  if (t.dataset.act === 'goal-del') { if (confirm('¿Quitar la imagen de meta?')) { delete S.goalImg; save(); render(); } return; }
   const act = t.dataset.act;
   const today = TODAY();
 
@@ -950,9 +880,10 @@ document.addEventListener('click', async (e) => {
     }
     queueSet(today, day, slug, i, s);
     save();
+    const finished = sets.slice(0, pr.sets).every((x) => x.done);
     const y = window.scrollY;
-    render();
-    window.scrollTo(0, y);
+    if (finished) { openEx = null; render(); scrollToEx(); }
+    else { render(); window.scrollTo(0, y); }
     return;
   }
   if (act === 'swap-open') { t.closest('.exbody').querySelector('.swaps').hidden ^= true; return; }
@@ -963,13 +894,12 @@ document.addEventListener('click', async (e) => {
     else S.swaps[t.dataset.key] = t.dataset.slug;
     save(); const y = window.scrollY; render(); window.scrollTo(0, y); return;
   }
-  if (act === 'toggle-ex') { t.closest('.ex').classList.toggle('collapsed'); return; }
   if (act === 'zoom') { $('#zoomimg').src = t.dataset.img; $('#zoom').hidden = false; return; }
   if (act === 'zoom-close') { $('#zoom').hidden = true; return; }
   if (act === 'timer-stop') { clearInterval(timer?.id); $('#timer').hidden = true; return; }
   if (act === 'timer-add') { const left = Math.round((timer.end - Date.now()) / 1000) + 30; startTimer(left, timer.label); return; }
   if (act === 'reset-day') {
-    const day = S.tab;
+    const day = selDay;
     if (!DAY_BY_ID[day] || !confirm(`¿Borrar las series de hoy de ${DAY_BY_ID[day].short} ${DAY_BY_ID[day].title}?`)) return;
     const ses = S.sessions[today]?.[day];
     if (ses) for (const slug in ses) ses[slug].forEach((s, i) => { if (s.done) queueSet(today, day, slug, i, { ...s, done: false }); });
@@ -1076,6 +1006,8 @@ document.addEventListener('change', (e) => {
   } else if (el.dataset.daily) {
     dailyOf()[el.dataset.daily] = num(el.value);
     queueDaily(today); save(); render();
+  } else if (el.id === 'goalimg' && el.files[0]) {
+    loadGoalImage(el.files[0]);
   } else if (el.id === 'imp' && el.files[0]) {
     el.files[0].text().then((txt) => {
       try {
@@ -1093,6 +1025,11 @@ document.addEventListener('input', (e) => {
   if (e.target.id === 'f-q') { clearTimeout(searchT); searchT = setTimeout(() => searchFoods(e.target.value), 150); }
 });
 
+function scrollToEx() {
+  const el = document.querySelector('.ex.open');
+  if (el) window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 64);
+}
+
 function toast(msg) {
   const el = $('#toast');
   el.textContent = msg; el.hidden = false;
@@ -1102,6 +1039,7 @@ function toast(msg) {
 window.addEventListener('online', () => sync());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { sync(); if (S._day !== TODAY()) { S._day = TODAY(); render(); } } });
 S._day = TODAY();
+S.tab = 'hoy'; // la app siempre se abre en Hoy
 render();
 sync();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

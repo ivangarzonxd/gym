@@ -189,13 +189,13 @@ const DAYS = [
 // Cardio según semana del plan. FC zona 2 ≈ 110-135 ppm (Watch: Correr en interior → zonas de FC).
 const CARDIO = {
   intervalos: [
-    { weeks: [1, 2], title: '🏃 Correr en cinta · caminar + trote', lines: ['5 min caminata rápida (6 km/h)', '6 × [1 min trote suave 7,5-8 km/h + 2 min caminata 6 km/h]', '3 min caminata suave', 'Total ≈ 26 min'] },
-    { weeks: [3, 4], title: '🏃 Correr en cinta · más trote', lines: ['5 min caminata rápida', '6 × [2 min trote 8 km/h + 1,5 min caminata]', '3 min suave', 'Total ≈ 29 min'] },
-    { weeks: [5, 6], title: '🏃 Correr en cinta · bloques largos', lines: ['5 min caminata rápida', '3 × [5 min trote 8-8,5 km/h + 2 min caminata]', '3 min suave', 'Total ≈ 29 min'] },
-    { weeks: [7, 99], title: '🏃 Correr en cinta · trote continuo', lines: ['5 min caminata rápida', '20 min trote continuo 8-9 km/h en zona 2', '3 min suave', 'Si ya es fácil: +1 km/h el último bloque de 5 min'] },
+    { weeks: [1, 2], title: 'Correr en cinta · caminar + trote', lines: ['5 min caminata rápida (6 km/h)', '6 × [1 min trote suave 7,5-8 km/h + 2 min caminata 6 km/h]', '3 min caminata suave', 'Total ≈ 26 min'] },
+    { weeks: [3, 4], title: 'Correr en cinta · más trote', lines: ['5 min caminata rápida', '6 × [2 min trote 8 km/h + 1,5 min caminata]', '3 min suave', 'Total ≈ 29 min'] },
+    { weeks: [5, 6], title: 'Correr en cinta · bloques largos', lines: ['5 min caminata rápida', '3 × [5 min trote 8-8,5 km/h + 2 min caminata]', '3 min suave', 'Total ≈ 29 min'] },
+    { weeks: [7, 99], title: 'Correr en cinta · trote continuo', lines: ['5 min caminata rápida', '20 min trote continuo 8-9 km/h en zona 2', '3 min suave', 'Si ya es fácil: +1 km/h el último bloque de 5 min'] },
   ],
   suave: [
-    { weeks: [1, 99], title: '🚶 Sin correr: recuperación', lines: ['10 min caminando en cinta a 5 km/h, sin inclinación', 'Ayuda a que las piernas se recuperen para el próximo día', 'Después, la clase si te apuntaste'] },
+    { weeks: [1, 99], title: 'Sin correr: recuperación', lines: ['10 min caminando en cinta a 5 km/h, sin inclinación', 'Ayuda a que las piernas se recuperen para el próximo día', 'Después, la clase si te apuntaste'] },
   ],
 };
 
@@ -329,7 +329,7 @@ const MENU = {
 const SCHEDULE = [
   ['09:30', 'Levántate', 'Vaso grande de agua. Mismo horario también los días sin gym.'],
   ['10:00', 'Desayuno', 'Huevos + pan, arepa o cereal + plátano. Energía para entrenar.'],
-  ['11:00', 'Gym', 'Pesas + cinta. Lleva 1 L de agua.'],
+  ['11:00', 'Gym', 'Llegar, cambiarte, calentar, pesas, cinta o clase y lavarte. Lleva 1 L de agua.', '13:00'],
   ['13:15', 'Batido + creatina', '1 cacito de proteína + 5 g de creatina en 300 ml de agua, todo junto.'],
   ['13:45', 'Almuerzo', 'Lo que toque en el piso + tu kit extra (huevo cocido o lata) si la proteína fue poca.'],
   ['15:00', 'Trabajo', 'Lleva una fruta y, por si acaso, el shaker con un cacito ya puesto.'],
