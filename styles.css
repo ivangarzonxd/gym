@@ -43,7 +43,7 @@ input::placeholder { color: #a3aab8; }
 .top {
   position: sticky; top: 0; z-index: 20;
   display: flex; justify-content: space-between; align-items: center;
-  padding: calc(env(safe-area-inset-top) + 18px) 16px 12px;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
   background: #fff;
   border-bottom: 1px solid var(--line);
 }
